@@ -831,22 +831,29 @@ function launchGame() {
   startAtmosphereMusic();
   rebuildLocalCharacter(selectedCharType);
 
+  if (gameMode === 'solo') {
+    remotePlayer.visible = false;
+    document.getElementById('hud-room').textContent = "MODO: INDIVIDUAL";
+    document.getElementById('btn-voice').style.display = 'none'; // Ocultar botón de voz en solitario
+  } else {
+    remotePlayer.visible = true;
+    document.getElementById('btn-voice').style.display = 'block';
+  }
+
   const charNameMap = { skeleton: 'ESQUELETO', mummy: 'MOMIA', witch: 'BRUJA' };
   document.getElementById('hud-char').textContent = charNameMap[selectedCharType];
   playerPos.set(myRole === 1 ? -18 : 18, 0, myRole === 1 ? -18 : 18);
 
   if (conn && conn.open) conn.send({ t: 'char', char: selectedCharType });
 
-  // Generar aleatoriedad para Nivel 2 y Nivel 3 si eres Host
-  if (myRole === 1) {
-    level2SafeIndex = Math.floor(Math.random() * 3);
-    level3Order = [0, 1, 2].sort(() => Math.random() - 0.5);
-  }
+  // Generar aleatoriedad para Nivel 2 y Nivel 3
+  level2SafeIndex = Math.floor(Math.random() * 3);
+  level3Order = [0, 1, 2].sort(() => Math.random() - 0.5);
 
   showBriefing(1);
 }
 
-// BRIEFINGS DE LOS 5 NIVELES
+// BRIEFINGS DIFERENCIADOS: MODO COOP VS MODO INDIVIDUAL
 function showBriefing(lvl) {
   isBriefingActive = true;
   const modal = document.getElementById('briefing-modal');
@@ -854,26 +861,64 @@ function showBriefing(lvl) {
   const desc = document.getElementById('briefing-desc');
   document.getElementById('hud-level').textContent = `NIVEL ${lvl}/5`;
 
-  if (lvl === 1) {
-    title.textContent = "NIVEL 1/5: RESONANCIA RÚNICA DOBLE";
-    desc.textContent = "Estáis en alas separadas. Los cristales alternan colores mágicos. Debéis pisar los dos altares cuando coincidan exactamente en el MISMO COLOR en 2 ocasiones para abrir el portal central. Si erráis, la bestia se acercará.";
-    document.getElementById('mission-guide').textContent = `OBJETIVO: Sincronizad el mismo color (${level1CurrentMatches}/${level1MatchesNeeded})`;
-  } else if (lvl === 2) {
-    title.textContent = "NIVEL 2/5: EL CAMINO DE LAS BALDOSAS ALEATORIAS";
-    desc.textContent = "El Jugador 1 tiene 3 baldosas rúnicas. En esta partida la runa segura ha cambiado aleatoriamente. El Jugador 2 tiene en su Tablilla Secreta cuál es la única segura. ¡Hablad por voz para no activar la trampa!";
-    document.getElementById('mission-guide').textContent = "OBJETIVO: P2 lee la tablilla y guía por voz a P1";
-  } else if (lvl === 3) {
-    title.textContent = "NIVEL 3/5: LA SECUENCIA DE ANTORCHAS MÍSTICAS";
-    desc.textContent = "Hay 3 peanas de fuego místico. El orden sagrado ha cambiado al azar. El Jugador 1 ve en su tablilla la secuencia exacta de 3 pasos que Jugador 2 debe encender. Si se equivoca, la bestia alertará.";
-    document.getElementById('mission-guide').textContent = "OBJETIVO: Encended las antorchas en la secuencia dictada por tu compañero";
-  } else if (lvl === 4) {
-    title.textContent = "NIVEL 4/5: LAS PALANCAS DE PRESIÓN INVERTIDA";
-    desc.textContent = "Hay dos palancas de piedra situadas en alas opuestas de la cripta. Para desbloquear la reja, ambos debéis pulsar vuestra palanca al MISMO TIEMPO (dentro de un margen de 2 segundos). ¡Haced una cuenta atrás por voz!";
-    document.getElementById('mission-guide').textContent = "OBJETIVO: Accionad ambas palancas doradas simultáneamente";
-  } else if (lvl === 5) {
-    title.textContent = "NIVEL 5/5: EL RITUAL DE LAS 3 RELIQUIAS";
-    desc.textContent = "La bestia merodea en las sombras. En tres esquinas lejanas del mapa hay 3 reliquias brillantes (Púrpura, Azul y Dorada). Explorad la cripta y recoged las 3 reliquias para hacer aparecer la Cruz Definitiva de Escape.";
-    document.getElementById('mission-guide').textContent = "OBJETIVO FINAL: Buscad y recoged las 3 reliquias brillantes (0/3)";
+  if (gameMode === 'solo') {
+    // --- MODO INDIVIDUAL: ESTRATEGIA, LÓGICA Y DEDUCCIÓN ---
+    if (lvl === 1) {
+      title.textContent = "SOLITARIO - NIVEL 1/5: EL ACERTIJO DEL ALTAR RÚNICO";
+      desc.textContent = "Estás solo en la cripta. En el suelo hay dos altares de cristal que alternan su energía. Para abrir la reja, debes colocarte sobre el altar luminoso justo en el instante en que ambos cristales compartan el MISMO color. ¡Observa el ritmo de pulsación!";
+      document.getElementById('mission-guide').textContent = `OBJETIVO INDIVIDUAL: Pisa el altar cuando ambos cristales coincidan (${level1CurrentMatches}/${level1MatchesNeeded})`;
+      document.getElementById('clue-board').style.display = 'block';
+      document.getElementById('clue-board').textContent = "📜 DEDUCCIÓN: Espera a que los dos cristales brillen con la misma luz al unísono";
+    } else if (lvl === 2) {
+      title.textContent = "SOLITARIO - NIVEL 2/5: EL DILEMA DE LAS TRES LOSAS";
+      desc.textContent = "Ante ti hay tres losas antiguas (Ojo, Calavera, Luna). Dos de ellas ocultan fosos mortales. Lee la pista arcana inscrita en tu tablilla para deducir cuál es la única losa segura y crúzala.";
+      const safeRune = RUNE_NAMES[level2SafeIndex];
+      document.getElementById('mission-guide').textContent = "OBJETIVO INDIVIDUAL: Resuelve el acertijo y pisa la losa correcta";
+      document.getElementById('clue-board').style.display = 'block';
+      document.getElementById('clue-board').textContent = `📜 PISTA DEL MURAL: "El camino seguro está marcado por: ${safeRune.icon} ${safeRune.name}"`;
+    } else if (lvl === 3) {
+      title.textContent = "SOLITARIO - NIVEL 3/5: LA COMBINACIÓN DE LAS TRES PEANAS";
+      desc.textContent = "Tres peanas flotantes con números romanos [ I ], [ II ] y [ III ] custodian la puerta. Debes encender las tres antorchas siguiendo la secuencia exacta indicada en el antiguo pergamino. Un fallo alertará al demonio.";
+      const seqStr = level3Order.map(idx => ROMAN_LABELS[idx]).join(' ➔ ');
+      document.getElementById('mission-guide').textContent = `OBJETIVO INDIVIDUAL: Enciende las peanas en orden (${pedestalStep}/3)`;
+      document.getElementById('clue-board').style.display = 'block';
+      document.getElementById('clue-board').textContent = `📜 PERGAMINO: Orden de ignición sagrado: ${seqStr}`;
+    } else if (lvl === 4) {
+      title.textContent = "SOLITARIO - NIVEL 4/5: CONTRARRELOJ DE PALANCAS";
+      desc.textContent = "Hay dos mecanismos en extremos opuestos [ A ] y [ B ]. Al accionar la palanca A, la compuerta comenzará a cerrarse: tienes exactamente 8 segundos para correr a toda velocidad hasta la palanca B antes de que el cerrojo vuelva a bloquearse.";
+      document.getElementById('mission-guide').textContent = "OBJETIVO INDIVIDUAL: Acciona la Palanca A y corre a la Palanca B antes de 8s";
+      document.getElementById('clue-board').style.display = 'block';
+      document.getElementById('clue-board').textContent = "⚡ AGILIDAD: Planifica tu ruta antes de accionar la primera palanca";
+    } else if (lvl === 5) {
+      title.textContent = "SOLITARIO - NIVEL 5/5: LA BÚSQUEDA DE LAS 3 RELIQUIAS";
+      desc.textContent = "La bestia merodea en la cripta central. Para que se materialice la Gran Cruz Verde de escape final, debes localizar y recolectar las 3 reliquias sagradas (Púrpura, Azul y Dorada) escondidas en los rincones del mapa.";
+      document.getElementById('mission-guide').textContent = `OBJETIVO FINAL: Encuentra las 3 reliquias ocultas (${relicsCount}/3)`;
+      document.getElementById('clue-board').style.display = 'block';
+      document.getElementById('clue-board').textContent = "🤫 SIGILO: Usa el minimapa para ubicar los 3 puntos dorados";
+    }
+  } else {
+    // --- MODO COOPERATIVO (2 JUGADORES) ---
+    if (lvl === 1) {
+      title.textContent = "COOPERATIVO - NIVEL 1/5: RESONANCIA RÚNICA DOBLE";
+      desc.textContent = "Estáis en alas separadas. Los cristales alternan colores mágicos. Debéis pisar los dos altares cuando coincidan exactamente en el MISMO COLOR en 2 ocasiones para abrir el portal central. Si erráis, la bestia se acercará.";
+      document.getElementById('mission-guide').textContent = `OBJETIVO: Sincronizad el mismo color (${level1CurrentMatches}/${level1MatchesNeeded})`;
+    } else if (lvl === 2) {
+      title.textContent = "COOPERATIVO - NIVEL 2/5: EL CAMINO DE LAS BALDOSAS";
+      desc.textContent = "El Jugador 1 tiene 3 baldosas rúnicas. En esta partida la runa segura ha cambiado aleatoriamente. El Jugador 2 tiene en su Tablilla Secreta cuál es la única segura. ¡Hablad por voz para no activar la trampa!";
+      document.getElementById('mission-guide').textContent = "OBJETIVO: P2 lee la tablilla y guía por voz a P1";
+    } else if (lvl === 3) {
+      title.textContent = "COOPERATIVO - NIVEL 3/5: LA SECUENCIA DE ANTORCHAS";
+      desc.textContent = "Hay 3 peanas con números romanos gigantes [ I ], [ II ] y [ III ]. El orden sagrado ha cambiado al azar. El Jugador 1 ve en su tablilla la secuencia que Jugador 2 debe encender.";
+      document.getElementById('mission-guide').textContent = "OBJETIVO: Encended las antorchas en la secuencia dictada por tu compañero";
+    } else if (lvl === 4) {
+      title.textContent = "COOPERATIVO - NIVEL 4/5: LAS PALANCAS DE PRESIÓN";
+      desc.textContent = "Hay dos palancas [ A ] y [ B ] en alas opuestas. Para desbloquear la reja, ambos debéis pulsar vuestra palanca al MISMO TIEMPO (dentro de un margen de 2 segundos). ¡Haced una cuenta atrás por voz!";
+      document.getElementById('mission-guide').textContent = "OBJETIVO: Accionad ambas palancas simultáneamente";
+    } else if (lvl === 5) {
+      title.textContent = "COOPERATIVO - NIVEL 5/5: EL RITUAL DE LAS 3 RELIQUIAS";
+      desc.textContent = "La bestia merodea en las sombras. En tres esquinas lejanas del mapa hay 3 reliquias brillantes. Explorad la cripta y recoged las 3 reliquias para hacer aparecer la Gran Cruz Verde final.";
+      document.getElementById('mission-guide').textContent = "OBJETIVO FINAL: Buscad y recoged las 3 reliquias brillantes (0/3)";
+    }
   }
 
   modal.style.display = 'flex';
@@ -1734,13 +1779,15 @@ function renderMinimap() {
     });
   }
 
-  // Compañero
-  const rx = cx + (remotePlayer.position.x - playerPos.x) * scale;
-  const ry = cy + (remotePlayer.position.z - playerPos.z) * scale;
-  mCtx.fillStyle = '#fb923c';
-  mCtx.beginPath();
-  mCtx.arc(rx, ry, 4.5, 0, Math.PI * 2);
-  mCtx.fill();
+  // Compañero (Solo si es modo cooperativo)
+  if (gameMode === 'coop') {
+    const rx = cx + (remotePlayer.position.x - playerPos.x) * scale;
+    const ry = cy + (remotePlayer.position.z - playerPos.z) * scale;
+    mCtx.fillStyle = '#fb923c';
+    mCtx.beginPath();
+    mCtx.arc(rx, ry, 4.5, 0, Math.PI * 2);
+    mCtx.fill();
+  }
 
   // Local
   mCtx.fillStyle = '#c084fc';
