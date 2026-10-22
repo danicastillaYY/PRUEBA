@@ -1413,7 +1413,7 @@ rebuildRemoteCharacter('mummy');
 
 function animateModel(modelObj, isWalking) {
   if (!modelObj || !modelObj.parts) return;
-  const t = performance.now() * 0.009;
+  const t = performance.now() * 0.014;
   const swing = isWalking ? Math.sin(t) * 0.45 : 0;
   if (modelObj.parts.legL && modelObj.parts.legR) {
     modelObj.parts.legL.rotation.x = swing; modelObj.parts.legR.rotation.x = -swing;
@@ -1570,6 +1570,7 @@ function triggerVictoryScreen() {
   document.getElementById('victory-modal').style.display = 'flex';
 }
 
+
 function applyLoadLevel(lvl) {
   currentLevel = lvl;
   doorUnlocked = false;
@@ -1582,80 +1583,139 @@ function applyLoadLevel(lvl) {
   document.getElementById('hud-threat').textContent = "BESTIA: CALMADA";
   document.getElementById('hud-threat').style.color = "#4ade80";
 
-  altar1.group.visible = (lvl === 1);
-  altar2.group.visible = (lvl === 1);
-  runeTiles.forEach(t => t.group.visible = (lvl === 2));
-  pedestals.forEach(p => {
-    p.group.visible = (lvl === 3);
-    p.active = false;
-    p.fire.material.color.setHex(0x38bdf8);
-    p.light.color.setHex(0x38bdf8);
-  });
+  // Ocultar TODO por defecto
+  altar1.group.visible = false;
+  altar2.group.visible = false;
+  runeTiles.forEach(t => t.group.visible = false);
+  pedestals.forEach(p => p.group.visible = false);
+  lever1.group.visible = false;
+  lever2.group.visible = false;
+  relics.forEach(r => r.group.visible = false);
 
-  // Configuración de pistas aleatorias en la tablilla
-  if (lvl === 2) {
-    if (myRole === 2) {
-      document.getElementById('clue-board').style.display = 'block';
-      const safeRune = RUNE_NAMES[level2SafeIndex];
-      document.getElementById('clue-board').textContent = `📜 TABLILLA SECRETA: Dile a tu compañero que pise la runa: ${safeRune.icon} ${safeRune.name}`;
+  soloScaleAltar.group.visible = false;
+  soloGems.forEach(g => g.group.visible = false);
+  soloMatrixTiles.forEach(t => t.group.visible = false);
+  soloSwitches.forEach(s => s.group.visible = false);
+  soloTorches.forEach(t => t.group.visible = false);
+  soloMonster.group.visible = false;
+  soloKeys.forEach(k => k.group.visible = false);
+
+  if (gameMode === 'coop') {
+    // --- ELEMENTOS COOPERATIVOS ---
+    altar1.group.visible = (lvl === 1);
+    altar2.group.visible = (lvl === 1);
+    runeTiles.forEach(t => t.group.visible = (lvl === 2));
+    pedestals.forEach(p => {
+      p.group.visible = (lvl === 3);
+      p.active = false;
+      p.fire.material.color.setHex(0x38bdf8);
+      p.light.color.setHex(0x38bdf8);
+    });
+    lever1.group.visible = (lvl === 4);
+    lever2.group.visible = (lvl === 4);
+    lever1.active = false; lever2.active = false;
+    relicsCount = 0;
+    relics.forEach(r => {
+      r.group.visible = (lvl === 5);
+      r.mesh.visible = (lvl === 5);
+      r.light.intensity = (lvl === 5) ? 2.5 : 0;
+      r.collected = false;
+    });
+
+    if (lvl === 2) {
+      if (myRole === 2) {
+        document.getElementById('clue-board').style.display = 'block';
+        const safeRune = RUNE_NAMES[level2SafeIndex];
+        document.getElementById('clue-board').textContent = `📜 TABLILLA SECRETA: Dile a tu compañero que pise la runa: ${safeRune.icon} ${safeRune.name}`;
+      } else {
+        document.getElementById('clue-board').style.display = 'none';
+      }
+    } else if (lvl === 3) {
+      if (myRole === 1) {
+        document.getElementById('clue-board').style.display = 'block';
+        const seqStr = level3Order.map(idx => ROMAN_LABELS[idx]).join(' ➔ ');
+        document.getElementById('clue-board').textContent = `📜 TABLILLA: Secuencia de antorchas: ${seqStr}`;
+      } else {
+        document.getElementById('clue-board').style.display = 'none';
+      }
     } else {
       document.getElementById('clue-board').style.display = 'none';
     }
-  } else if (lvl === 3) {
-    if (myRole === 1) {
-      document.getElementById('clue-board').style.display = 'block';
-      const seqStr = level3Order.map(idx => ROMAN_LABELS[idx]).join(' -> ');
-      document.getElementById('clue-board').textContent = `📜 TABLILLA: Secuencia aleatoria: ${seqStr}`;
-    } else {
-      document.getElementById('clue-board').style.display = 'none';
-    }
-  } else if (lvl === 4) {
-    if (myRole === 2) {
-      document.getElementById('clue-board').style.display = 'block';
-      document.getElementById('clue-board').textContent = "📜 TABLILLA: Guía por voz: el camino despejado rodea por la derecha";
-    } else {
-      document.getElementById('clue-board').style.display = 'none';
-    }
-  } else if (lvl === 5) {
-    document.getElementById('clue-board').style.display = 'block';
-    document.getElementById('clue-board').textContent = "🤫 SILENCIO: La bestia duerme. Cruzad la cruz central agachados.";
+
   } else {
-    document.getElementById('clue-board').style.display = 'none';
+    // --- ELEMENTOS EXCLUSIVOS MODO INDIVIDUAL (LÓGICA Y ESTRATEGIA) ---
+    remotePlayer.visible = false;
+
+    if (lvl === 1) {
+      // Nivel 1 Solo: Balanza de Gemas
+      soloTargetWeight = [3, 5, 6][Math.floor(Math.random() * 3)];
+      soloCurrentWeight = 0;
+      soloScaleAltar.group.visible = true;
+      soloGems.forEach(g => {
+        g.group.visible = true;
+        g.carried = false;
+        g.placed = false;
+        g.group.position.set(g.x, 0, g.z);
+      });
+      document.getElementById('clue-board').style.display = 'block';
+      document.getElementById('clue-board').textContent = `⚖️ OFRENDA: Coloca gemas en el altar hasta sumar exactamente ${soloTargetWeight} puntos. (Zafiro=1, Esmeralda=2, Rubí=4)`;
+      document.getElementById('mission-guide').textContent = `OBJETIVO: Lleva gemas al altar para sumar exactamente ${soloTargetWeight} (Actual: ${soloCurrentWeight})`;
+
+    } else if (lvl === 2) {
+      // Nivel 2 Solo: Matriz 3x3 de Deducción
+      soloMatrixStep = 0;
+      soloMatrixTiles.forEach(t => {
+        t.group.visible = true;
+        t.mesh.material.emissive.setHex(0x6366f1);
+        t.mesh.material.emissiveIntensity = 0.25;
+      });
+      document.getElementById('clue-board').style.display = 'block';
+      document.getElementById('clue-board').textContent = "📜 ACERTIJO: Fila 1: columna central. Fila 2: columna central. Fila 3: columna central. ¡Cruza recto sin desviarte!";
+      document.getElementById('mission-guide').textContent = "OBJETIVO: Cruza las 3 baldosas correctas en orden sin pisar las trampas laterales";
+
+    } else if (lvl === 3) {
+      // Nivel 3 Solo: Circuito Booleano de 3 Interruptores
+      soloSwitches.forEach(s => s.group.visible = true);
+      soloTorches.forEach(t => {
+        t.group.visible = true;
+        t.on = false;
+        t.flame.material.color.setHex(0x475569);
+        t.light.intensity = 0;
+      });
+      document.getElementById('clue-board').style.display = 'block';
+      document.getElementById('clue-board').textContent = "⚡ LÓGICA: SW1 invierte Fuego 1 y 2. SW2 invierte Fuego 2 y 3. SW3 invierte Fuego 1 y 3. ¡Enciende los 3 fuegos!";
+      document.getElementById('mission-guide').textContent = "OBJETIVO: Usa los interruptores hasta que las 3 antorchas queden encendidas a la vez";
+
+    } else if (lvl === 4) {
+      // Nivel 4 Solo: Sigilo y Patrulla con la Bestia
+      soloMonster.group.visible = true;
+      soloMonster.angle = 0;
+      soloKeys.forEach(k => {
+        k.group.visible = true;
+        k.collected = false;
+        k.mesh.visible = true;
+        k.light.intensity = 2.5;
+      });
+      document.getElementById('clue-board').style.display = 'block';
+      document.getElementById('clue-board').textContent = "🤫 SIGILO: La bestia patrulla en círculos. Muévete entre coberturas y coge las 2 Llaves de Oro.";
+      document.getElementById('mission-guide').textContent = "OBJETIVO: Recoge las 2 llaves sin que la bestia te detecte (0/2)";
+
+    } else if (lvl === 5) {
+      // Nivel 5 Solo: Las 3 Reliquias Malditas
+      relicsCount = 0;
+      relics.forEach(r => {
+        r.group.visible = true;
+        r.mesh.visible = true;
+        r.light.intensity = 2.5;
+        r.collected = false;
+      });
+      document.getElementById('clue-board').style.display = 'block';
+      document.getElementById('clue-board').textContent = "🕯️ RITUAL FINAL: Encuentra las 3 reliquias sagradas dispersas y cruza la Cruz Verde.";
+      document.getElementById('mission-guide').textContent = "OBJETIVO FINAL: Recoge las 3 reliquias ocultas (0/3)";
+    }
   }
 
   playerPos.set(myRole === 1 ? -18 : 18, 0, myRole === 1 ? -18 : 18);
-
-  // Soporte adaptativo para Modo Solitario
-  if (gameMode === 'solo') {
-    remotePlayer.visible = false;
-    // Nivel 1 Solo: Pisa el altar izquierdo cuando su color coincida con el cristal derecho
-    if (lvl === 1) {
-      document.getElementById('clue-board').style.display = 'block';
-      document.getElementById('clue-board').textContent = "📜 ABRIR PORTAL: Pisa el altar cuando ambos cristales coincidan en color";
-      document.getElementById('mission-guide').textContent = "OBJETIVO: Pisa el altar cuando ambos cristales tengan el mismo color";
-    } else if (lvl === 2) {
-      document.getElementById('clue-board').style.display = 'block';
-      const safeRune = RUNE_NAMES[level2SafeIndex];
-      document.getElementById('clue-board').textContent = `📜 DEDUCCIÓN RÚNICA: La única losa sagrada es: ${safeRune.icon} ${safeRune.name}`;
-      document.getElementById('mission-guide').textContent = "OBJETIVO: Consulta la tablilla y pisa la losa correcta";
-    } else if (lvl === 3) {
-      document.getElementById('clue-board').style.display = 'block';
-      const seqStr = level3Order.map(idx => ROMAN_LABELS[idx]).join(' -> ');
-      document.getElementById('clue-board').textContent = `📜 ENIGMA: Orden sagrado de encendido: ${seqStr}`;
-      document.getElementById('mission-guide').textContent = "OBJETIVO: Enciende las peanas marcadas en el orden correcto";
-    } else if (lvl === 4) {
-      document.getElementById('clue-board').style.display = 'block';
-      document.getElementById('clue-board').textContent = "📜 CONTRARRELOJ: Tienes 7 segundos para activar la Palanca B tras pulsar la A";
-      document.getElementById('mission-guide').textContent = "OBJETIVO: Activa la Palanca A y corre a la Palanca B antes de que expire";
-    } else if (lvl === 5) {
-      document.getElementById('clue-board').style.display = 'block';
-      document.getElementById('clue-board').textContent = "📜 RITUAL FINAL: Encuentra las 3 reliquias ocultas y escapa por la Cruz Verde";
-      document.getElementById('mission-guide').textContent = "OBJETIVO: Recoge las 3 reliquias por el mapa (0/3)";
-    }
-  } else {
-    remotePlayer.visible = true;
-  }
-
   showBriefing(lvl);
 }
 
@@ -1801,6 +1861,33 @@ function renderMinimap() {
   mCtx.moveTo(cx, cy);
   mCtx.lineTo(cx - Math.sin(camYaw) * 15, cy - Math.cos(camYaw) * 15);
   mCtx.stroke();
+
+  if (gameMode === 'solo') {
+    if (currentLevel === 1) {
+      const ax = cx + (soloScaleAltar.x - playerPos.x) * scale;
+      const ay = cy + (soloScaleAltar.z - playerPos.z) * scale;
+      mCtx.fillStyle = '#f59e0b'; mCtx.fillRect(ax - 4, ay - 4, 8, 8);
+      soloGems.forEach(g => {
+        if (!g.placed && !g.carried) {
+          const gx = cx + (g.x - playerPos.x) * scale;
+          const gy = cy + (g.z - playerPos.z) * scale;
+          mCtx.fillStyle = '#38bdf8'; mCtx.beginPath(); mCtx.arc(gx, gy, 3, 0, Math.PI * 2); mCtx.fill();
+        }
+      });
+    } else if (currentLevel === 4) {
+      const bx = cx + (soloMonster.x - playerPos.x) * scale;
+      const by = cy + (soloMonster.z - playerPos.z) * scale;
+      mCtx.fillStyle = '#ef4444'; mCtx.beginPath(); mCtx.arc(bx, by, 5.5, 0, Math.PI * 2); mCtx.fill();
+      soloKeys.forEach(k => {
+        if (!k.collected) {
+          const kx = cx + (k.x - playerPos.x) * scale;
+          const ky = cy + (k.z - playerPos.z) * scale;
+          mCtx.fillStyle = '#facc15'; mCtx.beginPath(); mCtx.arc(kx, ky, 3.5, 0, Math.PI * 2); mCtx.fill();
+        }
+      });
+    }
+  }
+
 }
 
 let lastNetTick = 0;
@@ -1840,6 +1927,152 @@ function applyRemoteRelicPickup(idx) {
   }
 }
 
+
+// ==========================================
+// OBJETOS EXCLUSIVOS DEL MODO INDIVIDUAL
+// ==========================================
+
+// Nivel 1 Solo: Gemas de valor y Altar de pesaje
+let soloTargetWeight = 5;
+let soloCurrentWeight = 0;
+const soloGems = [
+  { id: 1, val: 1, name: "Zafiro (Valor: 1)", color: 0x38bdf8, x: -10, z: -10, mesh: null, light: null, carried: false, placed: false },
+  { id: 2, val: 2, name: "Esmeralda (Valor: 2)", color: 0x22c55e, x: 10, z: -10, mesh: null, light: null, carried: false, placed: false },
+  { id: 3, val: 4, name: "Rubí (Valor: 4)", color: 0xef4444, x: -10, z: 10, mesh: null, light: null, carried: false, placed: false }
+];
+const soloScaleAltar = { x: 0, z: -14, group: null };
+
+function createSoloLevel1Entities() {
+  const g = new THREE.Group();
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.6, 1.0, 10), new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.6 }));
+  base.position.y = 0.5; g.add(base);
+  const dish = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.2, 0.2, 10), new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.8 }));
+  dish.position.y = 1.05; g.add(dish);
+  const altarLight = new THREE.PointLight(0xf59e0b, 2.0, 8);
+  altarLight.position.y = 1.5; g.add(altarLight);
+  g.position.set(soloScaleAltar.x, 0, soloScaleAltar.z);
+  g.visible = false; scene.add(g);
+  soloScaleAltar.group = g;
+
+  soloGems.forEach(gem => {
+    const gemG = new THREE.Group();
+    const p = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.6, 1.0, 8), new THREE.MeshStandardMaterial({ color: 0x334155 }));
+    p.position.y = 0.5; gemG.add(p);
+    const orb = new THREE.Mesh(new THREE.OctahedronGeometry(0.38, 0), new THREE.MeshStandardMaterial({ color: gem.color, emissive: gem.color, emissiveIntensity: 0.9 }));
+    orb.position.y = 1.25; gemG.add(orb);
+    const l = new THREE.PointLight(gem.color, 2.0, 6);
+    l.position.y = 1.4; gemG.add(l);
+    gemG.position.set(gem.x, 0, gem.z);
+    gemG.visible = false; scene.add(gemG);
+    gem.mesh = orb; gem.light = l; gem.group = gemG;
+  });
+}
+createSoloLevel1Entities();
+
+// Nivel 2 Solo: Matriz 3x3 de Baldosas con Deducción
+const soloMatrixTiles = [];
+let soloMatrixStep = 0;
+
+function createSoloLevel2Matrix() {
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 3; c++) {
+      const idx = r * 3 + c;
+      const tg = new THREE.Group();
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(2.4, 0.14, 2.4),
+        new THREE.MeshStandardMaterial({ color: 0x1e1b4b, emissive: 0x6366f1, emissiveIntensity: 0.25 })
+      );
+      tg.add(mesh);
+      tg.position.set(-3.5 + c * 3.5, 0.08, -12 + r * 3.5);
+      tg.visible = false; scene.add(tg);
+      soloMatrixTiles.push({ group: tg, mesh: mesh, idx: idx, r: r, c: c, x: tg.position.x, z: tg.position.z });
+    }
+  }
+}
+createSoloLevel2Matrix();
+
+// Nivel 3 Solo: Circuito de 3 Palancas de Inversión Booleana
+const soloSwitches = [
+  { id: 0, x: -8, z: -8, group: null, handle: null },
+  { id: 1, x: 0, z: -8, group: null, handle: null },
+  { id: 2, x: 8, z: -8, group: null, handle: null }
+];
+const soloTorches = [
+  { id: 0, x: -6, z: -14, on: false, flame: null, light: null },
+  { id: 1, x: 0, z: -14, on: false, flame: null, light: null },
+  { id: 2, x: 6, z: -14, on: false, flame: null, light: null }
+];
+
+function createSoloLevel3Circuits() {
+  soloSwitches.forEach(sw => {
+    const g = new THREE.Group();
+    const b = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.6, 1.0, 8), new THREE.MeshStandardMaterial({ color: 0x334155 }));
+    b.position.y = 0.5; g.add(b);
+    const h = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.7, 0.25), new THREE.MeshStandardMaterial({ color: 0xf59e0b }));
+    h.position.y = 1.2; g.add(h);
+    const sp = makeLabelSprite("SW " + (sw.id + 1), "#f59e0b");
+    sp.position.y = 2.0; g.add(sp);
+    g.position.set(sw.x, 0, sw.z);
+    g.visible = false; scene.add(g);
+    sw.group = g; sw.handle = h;
+  });
+
+  soloTorches.forEach(t => {
+    const g = new THREE.Group();
+    const p = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.5, 1.2, 8), new THREE.MeshStandardMaterial({ color: 0x1e293b }));
+    p.position.y = 0.6; g.add(p);
+    const fl = new THREE.Mesh(new THREE.SphereGeometry(0.25, 8, 8), new THREE.MeshBasicMaterial({ color: 0x475569 }));
+    fl.position.y = 1.35; g.add(fl);
+    const l = new THREE.PointLight(0x38bdf8, 0, 7);
+    l.position.y = 1.5; g.add(l);
+    g.position.set(t.x, 0, t.z);
+    g.visible = false; scene.add(g);
+    t.group = g; t.flame = fl; t.light = l;
+  });
+}
+createSoloLevel3Circuits();
+
+// Nivel 4 Solo: Patrulla de la Bestia y 2 Llaves de Piedra
+const soloMonster = {
+  group: null,
+  angle: 0,
+  speed: 0.018,
+  radius: 12,
+  x: 0, z: 0
+};
+const soloKeys = [
+  { id: 1, x: -16, z: 16, collected: false, group: null, mesh: null },
+  { id: 2, x: 16, z: 16, collected: false, group: null, mesh: null }
+];
+
+function createSoloLevel4Patrol() {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(1.6, 2.4, 1.4), new THREE.MeshStandardMaterial({ color: 0x450a0a, roughness: 0.8 }));
+  body.position.y = 1.2; g.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.7, 8, 8), new THREE.MeshStandardMaterial({ color: 0x7f1d1d }));
+  head.position.set(0, 2.4, -0.4); g.add(head);
+  const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 6), new THREE.MeshBasicMaterial({ color: 0xff0000 }));
+  eyeL.position.set(-0.25, 2.5, -0.95); g.add(eyeL);
+  const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 6), new THREE.MeshBasicMaterial({ color: 0xff0000 }));
+  eyeR.position.set(0.25, 2.5, -0.95); g.add(eyeR);
+  const aura = new THREE.PointLight(0xef4444, 3.5, 9);
+  aura.position.y = 1.8; g.add(aura);
+  g.visible = false; scene.add(g);
+  soloMonster.group = g;
+
+  soloKeys.forEach(k => {
+    const kg = new THREE.Group();
+    const km = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.1, 8, 16), new THREE.MeshStandardMaterial({ color: 0xfacc15, metalness: 0.8 }));
+    km.position.y = 1.2; kg.add(km);
+    const kl = new THREE.PointLight(0xfacc15, 2.5, 6);
+    kl.position.y = 1.4; kg.add(kl);
+    kg.position.set(k.x, 0, k.z);
+    kg.visible = false; scene.add(kg);
+    k.group = kg; k.mesh = km; k.light = kl;
+  });
+}
+createSoloLevel4Patrol();
+
 function animate(time) {
   requestAnimationFrame(animate);
 
@@ -1878,7 +2111,7 @@ function animate(time) {
   const isMoving = forward !== 0 || strafe !== 0;
   if (isMoving) {
     const len = Math.hypot(forward, strafe);
-    const speed = 0.09;
+    const speed = 0.16;
     const moveX = ((forward / len) * -Math.sin(camYaw) + (strafe / len) * Math.cos(camYaw)) * speed;
     const moveZ = ((forward / len) * -Math.cos(camYaw) + (strafe / len) * -Math.sin(camYaw)) * speed;
 
@@ -2164,6 +2397,133 @@ function animate(time) {
       lever2.mesh.material.color.setHex(0x22c55e);
       applyDoorUnlock();
       document.getElementById('mission-guide').textContent = "¡AMBAS PALANCAS COMPLETADAS! Corred a la Cruz Verde";
+    }
+  }
+
+  
+  // ==========================================
+  // LÓGICA DE INTERACCIÓN EN TIEMPO REAL: SOLO
+  // ==========================================
+  if (gameMode === 'solo' && !doorUnlocked) {
+    if (currentLevel === 1) {
+      soloGems.forEach(gem => {
+        if (!gem.placed && !gem.carried) {
+          const d = Math.hypot(playerPos.x - gem.group.position.x, playerPos.z - gem.group.position.z);
+          if (d < 1.6) {
+            gem.carried = true;
+            document.getElementById('mission-guide').textContent = `Llevas: ${gem.name}. Llévala al Altar Dorado (x:0, z:-14)`;
+          }
+        }
+        if (gem.carried) {
+          gem.group.position.set(playerPos.x, 1.8, playerPos.z);
+          const dAltar = Math.hypot(playerPos.x - soloScaleAltar.x, playerPos.z - soloScaleAltar.z);
+          if (dAltar < 2.0) {
+            gem.carried = false;
+            gem.placed = true;
+            gem.group.position.set(soloScaleAltar.x - 1.0 + gem.id * 0.7, 1.2, soloScaleAltar.z);
+            soloCurrentWeight += gem.val;
+            document.getElementById('mission-guide').textContent = `Gema colocada. Peso actual: ${soloCurrentWeight} / Objetivo: ${soloTargetWeight}`;
+            if (soloCurrentWeight === soloTargetWeight) {
+              applyDoorUnlock();
+              document.getElementById('mission-guide').textContent = "¡PESO EXACTO CONSEGUIDO! ✚ Corre a la Cruz Verde";
+            } else if (soloCurrentWeight > soloTargetWeight) {
+              setThreat(threatLevel + 1);
+              document.getElementById('mission-guide').textContent = "⚠️ ¡PESO EXCEDIDO! Se reinician las gemas";
+              setTimeout(() => applyLoadLevel(1), 1200);
+            }
+          }
+        }
+      });
+    }
+
+    if (currentLevel === 2 && time - tileDebounce > 800) {
+      soloMatrixTiles.forEach(tile => {
+        const d = Math.hypot(playerPos.x - tile.x, playerPos.z - tile.z);
+        if (d < 1.4) {
+          tileDebounce = time;
+          if (tile.c === 1 && tile.r === soloMatrixStep) {
+            tile.mesh.material.emissive.setHex(0x22c55e);
+            tile.mesh.material.emissiveIntensity = 0.8;
+            soloMatrixStep++;
+            document.getElementById('mission-guide').textContent = `¡PASO CORRECTO! (${soloMatrixStep}/3)`;
+            if (soloMatrixStep >= 3) {
+              applyDoorUnlock();
+              document.getElementById('mission-guide').textContent = "¡CAMINO DESCIFRADO! ✚ Cruza por la Cruz Verde";
+            }
+          } else if (tile.r === soloMatrixStep && tile.c !== 1) {
+            tile.mesh.material.emissive.setHex(0xef4444);
+            setThreat(threatLevel + 1);
+            playerPos.set(-18, 0, -18);
+            soloMatrixStep = 0;
+            document.getElementById('mission-guide').textContent = "⚠️ ¡TRAMPA DE FOSO! Losa equivocada. Vuelve a intentarlo";
+            setTimeout(() => {
+              soloMatrixTiles.forEach(t => t.mesh.material.emissive.setHex(0x6366f1));
+            }, 600);
+          }
+        }
+      });
+    }
+
+    if (currentLevel === 3 && time - tileDebounce > 900) {
+      soloSwitches.forEach(sw => {
+        const d = Math.hypot(playerPos.x - sw.x, playerPos.z - sw.z);
+        if (d < 1.8) {
+          tileDebounce = time;
+          if (sw.id === 0) {
+            soloTorches[0].on = !soloTorches[0].on;
+            soloTorches[1].on = !soloTorches[1].on;
+          } else if (sw.id === 1) {
+            soloTorches[1].on = !soloTorches[1].on;
+            soloTorches[2].on = !soloTorches[2].on;
+          } else if (sw.id === 2) {
+            soloTorches[0].on = !soloTorches[0].on;
+            soloTorches[2].on = !soloTorches[2].on;
+          }
+          let allOn = true;
+          soloTorches.forEach(t => {
+            t.flame.material.color.setHex(t.on ? 0x38bdf8 : 0x475569);
+            t.light.intensity = t.on ? 2.5 : 0;
+            if (!t.on) allOn = false;
+          });
+          document.getElementById('mission-guide').textContent = `Interruptor ${sw.id + 1} accionado.`;
+          if (allOn) {
+            applyDoorUnlock();
+            document.getElementById('mission-guide').textContent = "¡TODOS LOS FUEGOS ALINEADOS! ✚ Corre a la Cruz Verde";
+          }
+        }
+      });
+    }
+
+    if (currentLevel === 4) {
+      soloMonster.angle += soloMonster.speed;
+      soloMonster.x = Math.sin(soloMonster.angle) * soloMonster.radius;
+      soloMonster.z = Math.cos(soloMonster.angle) * soloMonster.radius;
+      soloMonster.group.position.set(soloMonster.x, 0, soloMonster.z);
+      soloMonster.group.rotation.y = soloMonster.angle + Math.PI / 2;
+
+      const distToBeast = Math.hypot(playerPos.x - soloMonster.x, playerPos.z - soloMonster.z);
+      if (distToBeast < 4.2) {
+        setThreat(3);
+      }
+
+      let keysDone = 0;
+      soloKeys.forEach(k => {
+        if (!k.collected) {
+          const dKey = Math.hypot(playerPos.x - k.x, playerPos.z - k.z);
+          if (dKey < 2.0) {
+            k.collected = true;
+            k.mesh.visible = false;
+            k.light.intensity = 0;
+          }
+        } else {
+          keysDone++;
+        }
+      });
+      document.getElementById('mission-guide').textContent = `Llaves recogidas: ${keysDone}/2 (Distancia a la bestia: ${distToBeast.toFixed(1)}m)`;
+      if (keysDone >= 2) {
+        applyDoorUnlock();
+        document.getElementById('mission-guide').textContent = "¡PUERTA DESBLOQUEADA CON LAS 2 LLAVES! Corre a la Cruz Verde";
+      }
     }
   }
 
