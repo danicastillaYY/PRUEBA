@@ -842,11 +842,16 @@ function launchGame() {
 
   const charNameMap = { skeleton: 'ESQUELETO', mummy: 'MOMIA', witch: 'BRUJA' };
   document.getElementById('hud-char').textContent = charNameMap[selectedCharType];
-  playerPos.set(myRole === 1 ? -18 : 18, 0, myRole === 1 ? -18 : 18);
+
+  if (gameMode === 'solo') {
+    playerPos.set(0, 0, 7);
+    camYaw = 0;
+  } else {
+    playerPos.set(myRole === 1 ? -18 : 18, 0, myRole === 1 ? -18 : 18);
+  }
 
   if (conn && conn.open) conn.send({ t: 'char', char: selectedCharType });
 
-  // Generar aleatoriedad para Nivel 2 y Nivel 3
   level2SafeIndex = Math.floor(Math.random() * 3);
   level3Order = [0, 1, 2].sort(() => Math.random() - 0.5);
 
@@ -1058,19 +1063,35 @@ scene.add(ceil);
 
 const wallMat = new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.8 });
 const walls = [];
-function makeWall(x, z, w, d, h = 4.2) {
+function makeWall(x, z, w, d, h = 4.2, isOuter = false) {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallMat);
   mesh.position.set(x, h / 2, z);
   scene.add(mesh);
-  walls.push({ x, z, w, d });
+  walls.push({ x, z, w, d, isOuter, mesh });
   return mesh;
 }
 
-makeWall(0, -25, 50, 1.5); makeWall(0, 25, 50, 1.5);
-makeWall(-25, 0, 1.5, 50); makeWall(25, 0, 1.5, 50);
-makeWall(-10, -10, 12, 1.5); makeWall(10, 10, 12, 1.5);
-makeWall(-10, 8, 1.5, 14); makeWall(10, -8, 1.5, 14);
-makeWall(0, -16, 1.5, 16); makeWall(0, 16, 1.5, 16);
+// Muros exteriores que delimitan la sala (siempre presentes)
+makeWall(0, -25, 50, 1.5, 4.2, true);
+makeWall(0, 25, 50, 1.5, 4.2, true);
+makeWall(-25, 0, 1.5, 50, 4.2, true);
+makeWall(25, 0, 1.5, 50, 4.2, true);
+
+// Muros divisorios interiores (SOLO para el laberinto cooperativo; en solitario se ocultan para dejar una sala diáfana)
+makeWall(-10, -10, 12, 1.5, 4.2, false);
+makeWall(10, 10, 12, 1.5, 4.2, false);
+makeWall(-10, 8, 1.5, 14, 4.2, false);
+makeWall(10, -8, 1.5, 14, 4.2, false);
+makeWall(0, -16, 1.5, 16, 4.2, false);
+makeWall(0, 16, 1.5, 16, 4.2, false);
+
+function updateWallVisibility() {
+  walls.forEach(w => {
+    if (!w.isOuter) {
+      w.mesh.visible = (gameMode === 'coop');
+    }
+  });
+}
 
 // Puerta Reja Central
 const door = new THREE.Mesh(new THREE.BoxGeometry(8, 4.2, 1.0), new THREE.MeshStandardMaterial({ map: gateTex, roughness: 0.3, metalness: 0.7 }));
@@ -1541,6 +1562,7 @@ function readGamepad() {
 function canMoveTo(nx, nz) {
   const r = 0.65;
   for (const w of walls) {
+    if (gameMode === 'solo' && !w.isOuter) continue; // En solitario no hay muros interiores que tapen
     if (nx + r > w.x - w.w / 2 && nx - r < w.x + w.w / 2 &&
         nz + r > w.z - w.d / 2 && nz - r < w.z + w.d / 2) {
       return false;
@@ -1717,7 +1739,13 @@ function applyLoadLevel(lvl) {
     }
   }
 
-  playerPos.set(myRole === 1 ? -18 : 18, 0, myRole === 1 ? -18 : 18);
+  if (gameMode === 'coop') {
+    playerPos.set(myRole === 1 ? -18 : 18, 0, myRole === 1 ? -18 : 18);
+  } else {
+    playerPos.set(0, 0, 7); // En solitario siempre en el centro con vista clara hacia el altar
+    camYaw = 0;
+  }
+  updateWallVisibility();
   showBriefing(lvl);
 }
 
@@ -1784,9 +1812,10 @@ function renderMinimap() {
   mCtx.clearRect(0, 0, 125, 125);
   const cx = 62.5 + mapPanX, cy = 62.5 + mapPanY, scale = 1.9;
 
-  // Muros
+  // Muros (en solo solo se dibujan los exteriores)
   mCtx.fillStyle = '#64748b';
   walls.forEach(w => {
+    if (gameMode === 'solo' && !w.isOuter) return;
     const mx = cx + (w.x - playerPos.x) * scale;
     const my = cy + (w.z - playerPos.z) * scale;
     mCtx.fillRect(mx - (w.w/2)*scale, my - (w.d/2)*scale, w.w*scale, w.d*scale);
