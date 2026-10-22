@@ -442,8 +442,12 @@
       </div>
     </div>
 
-    <button class="btn btn-purple" onclick="hostRoom()">CREAR SALA NUEVA</button>
-    <button class="btn btn-dark" onclick="openJoin()">UNIRSE A SALA EXISTENTE</button>
+    <div style="margin: 12px 0 6px 0; border-top: 1px solid #334155; padding-top: 10px;">
+      <button class="btn btn-purple" onclick="startSoloMode()">🗡️ MODO INDIVIDUAL (LÓGICA Y ESTRATEGIA)</button>
+    </div>
+    <div style="font-size:11px; color:#a855f7; font-weight:bold; margin-bottom:6px;">— O MODO COOPERATIVO (2 JUGADORES) —</div>
+    <button class="btn btn-dark" onclick="hostRoom()">CREAR SALA COOPERATIVA</button>
+    <button class="btn btn-dark" onclick="openJoin()">UNIRSE CON CÓDIGO (5 DÍGITOS)</button>
   </div>
 
   <div class="menu-card" id="pane-host" style="display:none;">
@@ -522,6 +526,7 @@ function toggleFullScreen() {
 
 // --- ESTADO GENERAL ---
 let selectedCharType = 'skeleton';
+let gameMode = 'coop';
 let inGame = false;
 let currentLevel = 1;
 let threatLevel = 0;
@@ -718,6 +723,7 @@ function make5DigitCode() {
 }
 
 function hostRoom() {
+  gameMode = 'coop';
   const code = make5DigitCode();
   const peerId = 'room-' + code;
   peer = new Peer(peerId);
@@ -759,6 +765,7 @@ function backInit() {
 }
 
 function joinRoom() {
+  gameMode = 'coop';
   const code = document.getElementById('input-code').value.trim();
   if (!code || code.length !== 5 || isNaN(code)) {
     return alert("Introduce los 5 números de la sala (Ej: 48291)");
@@ -807,6 +814,14 @@ function bindConnection() {
       triggerJumpscare();
     }
   });
+}
+
+
+function startSoloMode() {
+  gameMode = 'solo';
+  myRole = 1;
+  document.getElementById('hud-room').textContent = "MODO: SOLITARIO";
+  launchGame();
 }
 
 function launchGame() {
@@ -1170,6 +1185,47 @@ function createPedestals() {
 }
 createPedestals();
 
+// Etiquetas 3D Flotantes en Peanas y Palancas
+function makeLabelSprite(text, colorHex) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128; canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+  ctx.beginPath();
+  ctx.arc(64, 64, 56, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = colorHex;
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 50px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, 64, 64);
+  const texture = new THREE.CanvasTexture(canvas);
+  const spriteMat = new THREE.SpriteMaterial({ map: texture });
+  const sprite = new THREE.Sprite(spriteMat);
+  sprite.scale.set(1.5, 1.5, 1);
+  return sprite;
+}
+
+// Añadimos rótulo a las palancas A y B
+const spriteLeverA = makeLabelSprite("A", "#f59e0b");
+spriteLeverA.position.y = 2.2; lever1.group.add(spriteLeverA);
+
+const spriteLeverB = makeLabelSprite("B", "#38bdf8");
+spriteLeverB.position.y = 2.2; lever2.group.add(spriteLeverB);
+
+// Añadimos rótulo I, II, III a las peanas
+const romanLabels = ["I", "II", "III"];
+const romanColors = ["#38bdf8", "#facc15", "#c084fc"];
+pedestals.forEach((p, idx) => {
+  const sp = makeLabelSprite(romanLabels[idx], romanColors[idx]);
+  sp.position.y = 2.4;
+  p.group.add(sp);
+});
+
+
 // --- ESCULTURA DE MONSTRUOS (FRENTE HACIA -Z) ---
 function buildOrganicMonster(type) {
   const root = new THREE.Group();
@@ -1523,6 +1579,38 @@ function applyLoadLevel(lvl) {
   }
 
   playerPos.set(myRole === 1 ? -18 : 18, 0, myRole === 1 ? -18 : 18);
+
+  // Soporte adaptativo para Modo Solitario
+  if (gameMode === 'solo') {
+    remotePlayer.visible = false;
+    // Nivel 1 Solo: Pisa el altar izquierdo cuando su color coincida con el cristal derecho
+    if (lvl === 1) {
+      document.getElementById('clue-board').style.display = 'block';
+      document.getElementById('clue-board').textContent = "📜 ABRIR PORTAL: Pisa el altar cuando ambos cristales coincidan en color";
+      document.getElementById('mission-guide').textContent = "OBJETIVO: Pisa el altar cuando ambos cristales tengan el mismo color";
+    } else if (lvl === 2) {
+      document.getElementById('clue-board').style.display = 'block';
+      const safeRune = RUNE_NAMES[level2SafeIndex];
+      document.getElementById('clue-board').textContent = `📜 DEDUCCIÓN RÚNICA: La única losa sagrada es: ${safeRune.icon} ${safeRune.name}`;
+      document.getElementById('mission-guide').textContent = "OBJETIVO: Consulta la tablilla y pisa la losa correcta";
+    } else if (lvl === 3) {
+      document.getElementById('clue-board').style.display = 'block';
+      const seqStr = level3Order.map(idx => ROMAN_LABELS[idx]).join(' -> ');
+      document.getElementById('clue-board').textContent = `📜 ENIGMA: Orden sagrado de encendido: ${seqStr}`;
+      document.getElementById('mission-guide').textContent = "OBJETIVO: Enciende las peanas marcadas en el orden correcto";
+    } else if (lvl === 4) {
+      document.getElementById('clue-board').style.display = 'block';
+      document.getElementById('clue-board').textContent = "📜 CONTRARRELOJ: Tienes 7 segundos para activar la Palanca B tras pulsar la A";
+      document.getElementById('mission-guide').textContent = "OBJETIVO: Activa la Palanca A y corre a la Palanca B antes de que expire";
+    } else if (lvl === 5) {
+      document.getElementById('clue-board').style.display = 'block';
+      document.getElementById('clue-board').textContent = "📜 RITUAL FINAL: Encuentra las 3 reliquias ocultas y escapa por la Cruz Verde";
+      document.getElementById('mission-guide').textContent = "OBJETIVO: Recoge las 3 reliquias por el mapa (0/3)";
+    }
+  } else {
+    remotePlayer.visible = true;
+  }
+
   showBriefing(lvl);
 }
 
@@ -1970,6 +2058,65 @@ function animate(time) {
       } else {
         mismatchTimer = 0;
       }
+    }
+  }
+
+  
+  // Adaptación de victoria en Cruz Central en Solitario
+  if (doorUnlocked && crossGroup.visible && gameMode === 'solo') {
+    const d1Cross = Math.hypot(playerPos.x, playerPos.z);
+    if (d1Cross < 2.8) {
+      if (currentLevel < 5) {
+        const nextLvl = currentLevel + 1;
+        level2SafeIndex = Math.floor(Math.random() * 3);
+        level3Order = [0, 1, 2].sort(() => Math.random() - 0.5);
+        applyLoadLevel(nextLvl);
+      } else {
+        triggerVictoryScreen();
+      }
+    }
+  }
+
+  // Nivel 1 Solitario: Resonancia de altar
+  if (gameMode === 'solo' && currentLevel === 1 && !doorUnlocked) {
+    const dAltar1 = Math.hypot(playerPos.x - altar1.x, playerPos.z - altar1.z);
+    if (dAltar1 < 2.5) {
+      if (altar1.colorIdx === altar2.colorIdx) {
+        level1CurrentMatches++;
+        document.getElementById('mission-guide').textContent = `¡RESONANCIA LOGRADA! (${level1CurrentMatches}/${level1MatchesNeeded})`;
+        if (level1CurrentMatches >= level1MatchesNeeded) {
+          applyDoorUnlock();
+        }
+      }
+    }
+  }
+
+  // Nivel 4 Solitario: Contrarreloj entre palancas
+  if (gameMode === 'solo' && currentLevel === 4 && !doorUnlocked) {
+    const dLocalA = Math.hypot(playerPos.x - lever1.x, playerPos.z - lever1.z);
+    const dLocalB = Math.hypot(playerPos.x - lever2.x, playerPos.z - lever2.z);
+
+    if (dLocalA < 2.2 && !lever1.active) {
+      lever1.active = true;
+      lever1.timer = performance.now();
+      lever1.mesh.material.color.setHex(0x22c55e);
+      document.getElementById('mission-guide').textContent = "¡PALANCA A ACTIVADA! Corre a la Palanca B (7 segundos)";
+    }
+    if (lever1.active && !lever2.active) {
+      const elapsed = (performance.now() - lever1.timer) / 1000;
+      if (elapsed > 7.0) {
+        lever1.active = false;
+        lever1.mesh.material.color.setHex(0xf59e0b);
+        document.getElementById('mission-guide').textContent = "⏳ Se agotó el tiempo. Vuelve a pulsar la Palanca A";
+      } else {
+        document.getElementById('mission-guide').textContent = `¡CORRE A LA PALANCA B! (${(7.0 - elapsed).toFixed(1)}s)`;
+      }
+    }
+    if (lever1.active && dLocalB < 2.2 && !lever2.active) {
+      lever2.active = true;
+      lever2.mesh.material.color.setHex(0x22c55e);
+      applyDoorUnlock();
+      document.getElementById('mission-guide').textContent = "¡AMBAS PALANCAS COMPLETADAS! Corred a la Cruz Verde";
     }
   }
 
