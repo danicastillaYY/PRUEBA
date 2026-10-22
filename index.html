@@ -850,7 +850,7 @@ function launchGame() {
   level2SafeIndex = Math.floor(Math.random() * 3);
   level3Order = [0, 1, 2].sort(() => Math.random() - 0.5);
 
-  showBriefing(1);
+  applyLoadLevel(1);
 }
 
 // BRIEFINGS DIFERENCIADOS: MODO COOP VS MODO INDIVIDUAL
@@ -1108,8 +1108,8 @@ function makeAltar(x, z) {
   return { group, crystal, light, x, z, colorIdx: 0 };
 }
 
-const altar1 = makeAltar(-20, 20);
-const altar2 = makeAltar(20, -20);
+const altar1 = makeAltar(-20, 20); altar1.group.visible = false;
+const altar2 = makeAltar(20, -20); altar2.group.visible = false;
 
 function applyAltarColors(c1, c2) {
   altar1.colorIdx = c1; altar2.colorIdx = c2;
@@ -1657,8 +1657,10 @@ function applyLoadLevel(lvl) {
         g.placed = false;
         g.group.position.set(g.x, 0, g.z);
       });
+      playerPos.set(0, 0, 0); // En el centro de la sala
+      camYaw = Math.PI; // Mirando hacia el norte donde está el altar
       document.getElementById('clue-board').style.display = 'block';
-      document.getElementById('clue-board').textContent = `⚖️ OFRENDA: Coloca gemas en el altar hasta sumar exactamente ${soloTargetWeight} puntos. (Zafiro=1, Esmeralda=2, Rubí=4)`;
+      document.getElementById('clue-board').textContent = `⚖️ OFRENDA: Coloca gemas en el altar dorado hasta sumar exactamente ${soloTargetWeight} puntos. (Zafiro=1, Esmeralda=2, Rubí=4)`;
       document.getElementById('mission-guide').textContent = `OBJETIVO: Lleva gemas al altar para sumar exactamente ${soloTargetWeight} (Actual: ${soloCurrentWeight})`;
 
     } else if (lvl === 2) {
