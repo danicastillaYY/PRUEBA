@@ -1,0 +1,1989 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>La Cripta: Edición Procedural y Cámara Híbrida</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+  body {
+    background: #000;
+    color: #e2e8f0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+  }
+  #webgl-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* Bloqueo a horizontal en móvil */
+  #rotate-device-screen {
+    position: fixed;
+    inset: 0;
+    background: #080511;
+    z-index: 9999;
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 24px;
+  }
+  #rotate-device-screen .rotate-icon {
+    font-size: 55px;
+    margin-bottom: 14px;
+    animation: rotatePhone 2s ease-in-out infinite alternate;
+  }
+  #rotate-device-screen h2 {
+    color: #a855f7;
+    font-size: 19px;
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+  }
+  #rotate-device-screen p { color: #94a3b8; font-size: 13px; max-width: 320px; line-height: 1.4; }
+  @keyframes rotatePhone { 0% { transform: rotate(0deg); } 100% { transform: rotate(-90deg); } }
+
+  @media screen and (orientation: portrait) and (max-width: 900px) {
+    #rotate-device-screen { display: flex !important; }
+  }
+
+  /* HUD Superior */
+  #hud {
+    position: absolute;
+    top: 10px;
+    left: 12px;
+    right: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    pointer-events: none;
+    z-index: 25;
+  }
+  .hud-group {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    pointer-events: auto;
+  }
+  .hud-pill {
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: bold;
+    backdrop-filter: blur(8px);
+  }
+  #hud-room { color: #38bdf8; border-color: #0284c7; }
+  #hud-char { color: #c084fc; }
+  #hud-level { color: #fbbf24; }
+  #hud-threat { color: #4ade80; }
+  
+  .hud-btn {
+    background: rgba(15, 23, 42, 0.88);
+    border: 1px solid #7e22ce;
+    color: #f1f5f9;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 0 12px rgba(126, 34, 206, 0.35);
+    transition: all 0.2s;
+  }
+  .hud-btn:hover { background: #9333ea; }
+  .hud-btn.active { background: #22c55e; border-color: #4ade80; color: #000; }
+
+  /* Indicador central de misión en vivo */
+  #mission-guide {
+    position: absolute;
+    top: 52px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(15, 23, 42, 0.94);
+    border: 2px solid #a855f7;
+    padding: 8px 24px;
+    border-radius: 14px;
+    font-size: 13px;
+    font-weight: bold;
+    color: #facc15;
+    z-index: 20;
+    pointer-events: none;
+    text-align: center;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.7);
+    max-width: 85vw;
+    line-height: 1.3;
+  }
+
+  /* MINIMAPA FIJO CON MAPA DESLIZABLE INTERIOR */
+  #minimap-wrap {
+    position: absolute;
+    top: 50px;
+    right: 15px;
+    width: 125px;
+    height: 125px;
+    border-radius: 50%;
+    background: rgba(15, 23, 42, 0.70);
+    border: 2px solid #a855f7;
+    overflow: hidden;
+    z-index: 25;
+    box-shadow: 0 0 20px rgba(168, 85, 247, 0.35);
+    backdrop-filter: blur(8px);
+    touch-action: none;
+    cursor: grab;
+    pointer-events: auto;
+  }
+  #minimap-wrap:active { cursor: grabbing; border-color: #facc15; }
+  #minimap-canvas { width: 100%; height: 100%; pointer-events: none; }
+  
+  #btn-recenter-map {
+    position: absolute;
+    top: 150px;
+    right: 15px;
+    background: rgba(15, 23, 42, 0.9);
+    border: 1px solid #a855f7;
+    color: #facc15;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: bold;
+    cursor: pointer;
+    z-index: 26;
+    display: none;
+  }
+
+  /* Cartel Tablilla Asimétrica */
+  #clue-board {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(15, 23, 42, 0.96);
+    border: 2px solid #38bdf8;
+    padding: 9px 24px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: bold;
+    color: #38bdf8;
+    z-index: 20;
+    display: none;
+    text-align: center;
+    box-shadow: 0 0 25px rgba(56, 189, 248, 0.45);
+  }
+
+  /* Modales */
+  .modal-overlay {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at center, rgba(15, 23, 42, 0.96), rgba(2, 6, 23, 0.99));
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+    padding: 16px;
+    overflow-y: auto;
+  }
+  .menu-card {
+    background: #0c0f1a;
+    border: 2px solid #334155;
+    border-radius: 14px;
+    padding: 20px 24px;
+    max-width: 520px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 0 50px rgba(0,0,0,0.9);
+  }
+  h1 { font-size: 20px; color: #a855f7; letter-spacing: 2px; margin-bottom: 4px; text-transform: uppercase; }
+  p { font-size: 12px; color: #94a3b8; margin-bottom: 12px; line-height: 1.4; }
+  
+  .char-select-grid {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+    justify-content: center;
+  }
+  .char-card {
+    flex: 1;
+    background: #111827;
+    border: 2px solid #1f2937;
+    border-radius: 10px;
+    padding: 10px 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .char-card:hover { border-color: #6b21a8; }
+  .char-card.selected {
+    border-color: #a855f7;
+    background: #1e1b4b;
+    box-shadow: 0 0 16px rgba(168, 85, 247, 0.4);
+  }
+  .char-icon { font-size: 30px; margin-bottom: 2px; }
+  .char-name { font-size: 12px; font-weight: bold; color: #f1f5f9; }
+
+  .btn {
+    display: block;
+    width: 100%;
+    padding: 11px;
+    margin: 6px 0;
+    border: none;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 13px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: all 0.2s;
+  }
+  .btn-purple { background: #7e22ce; color: #fff; }
+  .btn-purple:hover { background: #9333ea; }
+  .btn-dark { background: #1e293b; color: #cbd5e1; border: 1px solid #475569; }
+  .btn-red { background: #b91c1c; color: #fff; }
+
+  input[type="text"] {
+    width: 100%;
+    padding: 12px;
+    background: #030712;
+    border: 2px solid #7e22ce;
+    border-radius: 8px;
+    color: #facc15;
+    font-size: 24px;
+    font-weight: bold;
+    text-align: center;
+    letter-spacing: 8px;
+    margin-bottom: 8px;
+  }
+
+  .room-badge-large {
+    background: #1e1b4b;
+    border: 2px solid #a855f7;
+    padding: 10px 16px;
+    border-radius: 10px;
+    color: #facc15;
+    font-size: 28px;
+    font-weight: 900;
+    letter-spacing: 6px;
+    margin: 10px 0 14px 0;
+    display: inline-block;
+  }
+
+  /* Briefing de Nivel */
+  #briefing-modal {
+    position: absolute;
+    inset: 0;
+    background: rgba(2, 6, 23, 0.94);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 80;
+    padding: 16px;
+  }
+  .parchment {
+    background: #181324;
+    border: 2px solid #eab308;
+    border-radius: 14px;
+    padding: 24px;
+    max-width: 500px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 0 50px rgba(234, 179, 8, 0.25);
+  }
+  .parchment h2 { color: #facc15; font-size: 18px; margin-bottom: 10px; }
+
+  /* Victoria */
+  #victory-modal {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at center, rgba(30, 27, 75, 0.98), rgba(2, 6, 23, 1));
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 150;
+    padding: 20px;
+  }
+  .victory-card {
+    background: #0d1224;
+    border: 3px solid #22c55e;
+    border-radius: 16px;
+    padding: 30px;
+    max-width: 520px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 0 60px rgba(34, 197, 94, 0.4);
+  }
+  .victory-card h1 { color: #4ade80; font-size: 24px; margin-bottom: 10px; letter-spacing: 2px; }
+
+  /* Susto */
+  #jumpscare-screen {
+    position: absolute;
+    inset: 0;
+    background: #000;
+    display: none;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    z-index: 200;
+  }
+  #demon-face {
+    font-size: 130px;
+    animation: shake 0.1s infinite;
+    filter: drop-shadow(0 0 45px #ef4444);
+  }
+  #jumpscare-text {
+    font-size: 26px;
+    font-weight: 900;
+    color: #ef4444;
+    letter-spacing: 4px;
+    margin-top: 14px;
+  }
+  @keyframes shake {
+    0% { transform: translate(3px, 2px) rotate(0deg); }
+    25% { transform: translate(-3px, -3px) rotate(-2deg); }
+    50% { transform: translate(-4px, 2px) rotate(2deg); }
+    70% { transform: translate(4px, 1px) rotate(-1deg); }
+    100% { transform: translate(1px, -2px) rotate(1deg); }
+  }
+
+  /* Control móvil de 1 solo joystick */
+  #mobile-ui {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 50;
+    display: none;
+  }
+  .touch-pad-single {
+    position: absolute;
+    bottom: 22px;
+    left: 28px;
+    width: 130px;
+    height: 130px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    border: 2px solid rgba(168, 85, 247, 0.4);
+    pointer-events: auto;
+  }
+  .nipple {
+    position: absolute;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: rgba(168, 85, 247, 0.7);
+    top: 39px;
+    left: 39px;
+    box-shadow: 0 0 15px rgba(168, 85, 247, 0.5);
+  }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+</head>
+<body>
+
+<div id="rotate-device-screen">
+  <div class="rotate-icon">📱 ➔ 🔄</div>
+  <h2>GIRA TU DISPOSITIVO</h2>
+  <p>Para una experiencia óptima y controles ergonómicos, este juego debe jugarse en <b>Modo Horizontal</b>.</p>
+</div>
+
+<div id="hud">
+  <div class="hud-group">
+    <div class="hud-pill" id="hud-room">SALA: -----</div>
+    <div class="hud-pill" id="hud-level">NIVEL 1/5</div>
+    <div class="hud-pill" id="hud-threat">BESTIA: CALMADA</div>
+    <div class="hud-pill" id="hud-char">ESQUELETO</div>
+  </div>
+  <div class="hud-group">
+    <button class="hud-btn" id="btn-fullscreen" onclick="toggleFullScreen()">⛶ FULLSCREEN</button>
+    <button class="hud-btn" id="btn-voice" onclick="toggleVoiceChat()">🎤 VOZ</button>
+    <button class="hud-btn" onclick="toggleSettingsModal(true)">⚙️ AJUSTES</button>
+  </div>
+</div>
+
+<div id="mission-guide">OBJETIVO: Pisa el altar cuando ambos cristales coincidan en color</div>
+
+<!-- MINIMAPA FIJO CON MAPA DESLIZABLE INTERIOR -->
+<div id="minimap-wrap">
+  <canvas id="minimap-canvas" width="125" height="125"></canvas>
+</div>
+<button id="btn-recenter-map" onclick="recenterMinimap()">🎯 RECENTRAR MAPA</button>
+
+<div id="clue-board">TABLILLA: "Dile por voz a tu compañero qué hacer"</div>
+
+<canvas id="webgl-canvas"></canvas>
+
+<!-- UN SOLO JOYSTICK MÓVIL EN PANTALLA -->
+<div id="mobile-ui">
+  <div id="pad-move" class="touch-pad-single"><div id="nip-move" class="nipple"></div></div>
+</div>
+
+<!-- Lobby Inicial -->
+<div class="modal-overlay" id="overlay-screen">
+  <div class="menu-card" id="pane-init">
+    <h1>LA CRIPTA DE LOS MONSTRUOS</h1>
+    <p>5 niveles con puzles aleatorios. Coordinaos por voz para descifrar cada acertijo.</p>
+    
+    <div class="char-select-grid">
+      <div class="char-card selected" onclick="pickChar('skeleton', this)">
+        <div class="char-icon">💀</div>
+        <div class="char-name">ESQUELETO</div>
+      </div>
+      <div class="char-card" onclick="pickChar('mummy', this)">
+        <div class="char-icon">🩹</div>
+        <div class="char-name">MOMIA</div>
+      </div>
+      <div class="char-card" onclick="pickChar('witch', this)">
+        <div class="char-icon">🧙‍♀️</div>
+        <div class="char-name">BRUJA</div>
+      </div>
+    </div>
+
+    <button class="btn btn-purple" onclick="hostRoom()">CREAR SALA NUEVA</button>
+    <button class="btn btn-dark" onclick="openJoin()">UNIRSE A SALA EXISTENTE</button>
+  </div>
+
+  <div class="menu-card" id="pane-host" style="display:none;">
+    <h1>SALA CREADA</h1>
+    <p>Comparte este código de 5 números con tu compañero:</p>
+    <div class="room-badge-large" id="display-room-code">-----</div>
+    <button class="btn btn-purple" onclick="launchGame()">ENTRAR A LA CRIPTA</button>
+  </div>
+
+  <div class="menu-card" id="pane-join" style="display:none;">
+    <h1>UNIRSE A SALA</h1>
+    <p>Introduce los 5 números que te ha dado tu compañero:</p>
+    <input type="text" id="input-code" placeholder="12345" maxlength="5" pattern="[0-9]*" inputmode="numeric">
+    <button class="btn btn-purple" onclick="joinRoom()">CONECTAR Y ENTRAR</button>
+    <button class="btn btn-dark" onclick="backInit()">VOLVER</button>
+  </div>
+</div>
+
+<!-- Briefing de Nivel -->
+<div id="briefing-modal">
+  <div class="parchment">
+    <h2 id="briefing-title">NIVEL 1/5: CÓDICE RÚNICO</h2>
+    <p id="briefing-desc" style="color:#f1f5f9; font-size:13px; margin-bottom:14px;"></p>
+    <button class="btn btn-purple" onclick="dismissBriefing()">ENTENDIDO / COMENZAR</button>
+  </div>
+</div>
+
+<!-- Pantalla de Victoria Final -->
+<div class="modal-overlay" id="victory-modal">
+  <div class="victory-card">
+    <h1>¡LOS 5 NIVELES SUPERADOS!</h1>
+    <p style="color:#cbd5e1; font-size:13px; margin-bottom:14px; line-height: 1.5;">
+      ¡Habéis conquistado la Cripta de los Monstruos! Superasteis todos los acertijos aleatorios y burlasteis a la bestia con éxito.
+    </p>
+    <div style="font-size:45px; margin-bottom:14px;">🏆 🕯️ 🚪 💀</div>
+    <button class="btn btn-purple" onclick="returnToMainMenu()">VOLVER AL MENÚ DE INICIO</button>
+  </div>
+</div>
+
+<!-- Modal Ajustes en Partida -->
+<div class="modal-overlay" id="settings-screen" style="display:none;">
+  <div class="menu-card">
+    <h1>AJUSTES DE PARTIDA</h1>
+    <p style="margin-bottom:6px; color:#cbd5e1;">Código de vuestra sala:</p>
+    <div class="room-badge-large" id="settings-room-code">-----</div>
+    <p style="color:#94a3b8; font-size:11px; margin-bottom:14px;">(Verifica que ambos tengáis exactamente el mismo número arriba)</p>
+
+    <button class="btn btn-dark" onclick="showLevelBriefingAgain()">📜 LEER INSTRUCCIONES DEL NIVEL</button>
+    <button class="btn btn-purple" onclick="toggleSettingsModal(false)">REANUDAR PARTIDA</button>
+    <button class="btn btn-red" onclick="returnToMainMenu()">SALIR AL INICIO</button>
+  </div>
+</div>
+
+<!-- Susto / Jumpscare -->
+<div id="jumpscare-screen">
+  <div id="demon-face">👹</div>
+  <div id="jumpscare-text">¡LA BESTIA OS HA CAZADO!</div>
+</div>
+
+<script>
+const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+if (isMobile) {
+  document.getElementById('mobile-ui').style.display = 'block';
+}
+
+function toggleFullScreen() {
+  if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+    const el = document.documentElement;
+    if (el.requestFullscreen) el.requestFullscreen();
+    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+  } else {
+    if (document.exitFullscreen) document.exitFullscreen();
+    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+  }
+}
+
+// --- ESTADO GENERAL ---
+let selectedCharType = 'skeleton';
+let inGame = false;
+let currentLevel = 1;
+let threatLevel = 0;
+let isBriefingActive = false;
+let currentRoomCode = "-----";
+
+// --- PUZLES ALEATORIOS SINCRONIZADOS ---
+// Nivel 1: Sincronización rúnica (requiere 2 coincidencias consecutivas para más reto)
+let level1MatchesNeeded = 2;
+let level1CurrentMatches = 0;
+
+// Nivel 2: Runa segura generada al azar (0=Azul/Ojo, 1=Roja/Calavera, 2=Verde/Luna)
+let level2SafeIndex = 0;
+const RUNE_NAMES = [
+  { name: 'OJO MÍSTICO (AZUL)', icon: '👁️', colorHex: 0x3b82f6 },
+  { name: 'CALAVERA ARDIENTE (ROJA)', icon: '💀', colorHex: 0xef4444 },
+  { name: 'LUNA OSCURA (VERDE)', icon: '🌙', colorHex: 0x10b981 }
+];
+
+// Nivel 3: Permutación aleatoria de las 3 antorchas (ej: [2, 0, 1])
+let level3Order = [0, 1, 2];
+const ROMAN_LABELS = ['I', 'II', 'III'];
+let pedestalStep = 0;
+
+// Nivel 4: Código numérico de 3 dígitos que P2 debe dictar a P1
+let level4Code = [3, 1, 2];
+let level4Step = 0;
+
+function pickChar(type, el) {
+  if (inGame) return;
+  selectedCharType = type;
+  document.querySelectorAll('.char-card').forEach(c => c.classList.remove('selected'));
+  if (el) el.classList.add('selected');
+}
+
+function updateRoomDisplays(code) {
+  currentRoomCode = code;
+  document.getElementById('hud-room').textContent = "SALA: " + code;
+  document.getElementById('display-room-code').textContent = code;
+  document.getElementById('settings-room-code').textContent = code;
+}
+
+function toggleSettingsModal(open) {
+  const modal = document.getElementById('settings-screen');
+  if (open) {
+    modal.style.display = 'flex';
+    if (document.pointerLockElement === document.body) document.exitPointerLock();
+  } else {
+    modal.style.display = 'none';
+    if (!isMobile && inGame && !isBriefingActive) document.body.requestPointerLock();
+  }
+}
+
+function showLevelBriefingAgain() {
+  toggleSettingsModal(false);
+  showBriefing(currentLevel);
+}
+
+function returnToMainMenu() {
+  toggleSettingsModal(false);
+  inGame = false;
+  currentLevel = 1;
+  threatLevel = 0;
+  stopAtmosphereMusic();
+  if (document.pointerLockElement === document.body) document.exitPointerLock();
+  if (conn) { conn.close(); conn = null; }
+  if (peer) { peer.destroy(); peer = null; }
+  if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+
+  updateRoomDisplays("-----");
+  document.getElementById('victory-modal').style.display = 'none';
+  document.getElementById('settings-screen').style.display = 'none';
+  document.getElementById('briefing-modal').style.display = 'none';
+  document.getElementById('clue-board').style.display = 'none';
+  document.getElementById('overlay-screen').style.display = 'flex';
+  document.getElementById('pane-init').style.display = 'block';
+  document.getElementById('pane-host').style.display = 'none';
+  document.getElementById('pane-join').style.display = 'none';
+  document.getElementById('hud-level').textContent = "NIVEL 1/5";
+}
+
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Escape' && inGame) {
+    const modal = document.getElementById('settings-screen');
+    toggleSettingsModal(modal.style.display !== 'flex');
+  }
+});
+
+// --- AUDIO PROCEDURAL ---
+let audioCtx = null;
+let musicNodes = [];
+
+function initAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function startAtmosphereMusic() {
+  initAudio();
+  if (musicNodes.length > 0) return;
+
+  const musicGain = audioCtx.createGain();
+  musicGain.gain.setValueAtTime(0.045, audioCtx.currentTime);
+  musicGain.connect(audioCtx.destination);
+
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = 160;
+  filter.connect(musicGain);
+
+  const osc1 = audioCtx.createOscillator();
+  osc1.type = 'sine'; osc1.frequency.value = 55;
+  osc1.connect(filter); osc1.start();
+  musicNodes.push(osc1);
+
+  const osc2 = audioCtx.createOscillator();
+  osc2.type = 'triangle'; osc2.frequency.value = 82.4;
+  osc2.connect(filter); osc2.start();
+  musicNodes.push(osc2);
+}
+
+function stopAtmosphereMusic() {
+  musicNodes.forEach(node => { try { node.stop(); node.disconnect(); } catch(e){} });
+  musicNodes = [];
+}
+
+function playBeastRoar(intensity = 1) {
+  if (!audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(68 * intensity, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(28, audioCtx.currentTime + 1.2);
+  gain.gain.setValueAtTime(0.35 * intensity, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.2);
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.start(); osc.stop(audioCtx.currentTime + 1.2);
+}
+
+function playJumpscareSound() {
+  if (!audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = 'square';
+  osc.frequency.setValueAtTime(480, audioCtx.currentTime);
+  osc.frequency.linearRampToValueAtTime(110, audioCtx.currentTime + 0.7);
+  gain.gain.setValueAtTime(0.85, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.7);
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.start(); osc.stop(audioCtx.currentTime + 0.7);
+}
+
+// --- CHAT DE VOZ ---
+let localStream = null;
+let isVoiceActive = false;
+
+async function toggleVoiceChat() {
+  initAudio();
+  const btn = document.getElementById('btn-voice');
+  if (!isVoiceActive) {
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      isVoiceActive = true;
+      btn.textContent = "🎤 VOZ: ON";
+      btn.classList.add('active');
+
+      if (peer && conn && conn.peer) {
+        const call = peer.call(conn.peer, localStream);
+        call.on('stream', s => playRemoteAudio(s));
+      }
+    } catch(err) {
+      alert("No se pudo activar el micrófono: " + err.message);
+    }
+  } else {
+    if (localStream) localStream.getTracks().forEach(t => t.stop());
+    localStream = null;
+    isVoiceActive = false;
+    btn.textContent = "🎤 VOZ";
+    btn.classList.remove('active');
+  }
+}
+
+function playRemoteAudio(stream) {
+  const audio = new Audio();
+  audio.srcObject = stream;
+  audio.play();
+}
+
+// --- RED MULTIJUGADOR PEERJS ---
+let peer = null, conn = null, myRole = 1;
+
+function make5DigitCode() {
+  return String(Math.floor(10000 + Math.random() * 90000));
+}
+
+function hostRoom() {
+  const code = make5DigitCode();
+  const peerId = 'room-' + code;
+  peer = new Peer(peerId);
+  peer.on('open', () => {
+    myRole = 1;
+    updateRoomDisplays(code);
+    document.getElementById('pane-init').style.display = 'none';
+    document.getElementById('pane-host').style.display = 'block';
+  });
+  peer.on('connection', (c) => {
+    conn = c;
+    bindConnection();
+  });
+  peer.on('call', (call) => {
+    if (localStream) call.answer(localStream);
+    else {
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(s => {
+        localStream = s; call.answer(s);
+      });
+    }
+    call.on('stream', s => playRemoteAudio(s));
+  });
+  peer.on('error', (err) => {
+    if (err.type === 'unavailable-id') {
+      peer.destroy();
+      hostRoom();
+    }
+  });
+}
+
+function openJoin() {
+  document.getElementById('pane-init').style.display = 'none';
+  document.getElementById('pane-join').style.display = 'block';
+}
+
+function backInit() {
+  document.getElementById('pane-join').style.display = 'none';
+  document.getElementById('pane-init').style.display = 'block';
+}
+
+function joinRoom() {
+  const code = document.getElementById('input-code').value.trim();
+  if (!code || code.length !== 5 || isNaN(code)) {
+    return alert("Introduce los 5 números de la sala (Ej: 48291)");
+  }
+  const targetPeerId = 'room-' + code;
+  peer = new Peer();
+  peer.on('open', () => {
+    conn = peer.connect(targetPeerId);
+    myRole = 2;
+    updateRoomDisplays(code);
+    bindConnection();
+    launchGame();
+  });
+  peer.on('call', (call) => {
+    if (localStream) call.answer(localStream);
+    call.on('stream', s => playRemoteAudio(s));
+  });
+}
+
+function bindConnection() {
+  conn.on('open', () => {
+    conn.send({ t: 'char', char: selectedCharType });
+  });
+  conn.on('data', (d) => {
+    if (d.t === 'sync') {
+      remotePlayer.position.set(d.x, d.y, d.z);
+      remotePlayer.rotation.y = d.ry;
+      animateModel(remoteModel, d.walking);
+      if (myRole === 2 && d.c1 !== undefined) {
+        applyAltarColors(d.c1, d.c2);
+      }
+    } else if (d.t === 'char') {
+      rebuildRemoteCharacter(d.char);
+    } else if (d.t === 'door_open') {
+      applyDoorUnlock();
+    } else if (d.t === 'load_level') {
+      // Sincronizar configuraciones aleatorias de nivel
+      if (d.safeIdx !== undefined) level2SafeIndex = d.safeIdx;
+      if (d.torchOrder !== undefined) level3Order = d.torchOrder;
+      applyLoadLevel(d.lvl);
+    } else if (d.t === 'victory') {
+      triggerVictoryScreen();
+    } else if (d.t === 'threat') {
+      setThreat(d.val);
+    } else if (d.t === 'jumpscare') {
+      triggerJumpscare();
+    }
+  });
+}
+
+function launchGame() {
+  document.getElementById('overlay-screen').style.display = 'none';
+  inGame = true;
+  initAudio();
+  startAtmosphereMusic();
+  rebuildLocalCharacter(selectedCharType);
+
+  const charNameMap = { skeleton: 'ESQUELETO', mummy: 'MOMIA', witch: 'BRUJA' };
+  document.getElementById('hud-char').textContent = charNameMap[selectedCharType];
+  playerPos.set(myRole === 1 ? -18 : 18, 0, myRole === 1 ? -18 : 18);
+
+  if (conn && conn.open) conn.send({ t: 'char', char: selectedCharType });
+
+  // Generar aleatoriedad para Nivel 2 y Nivel 3 si eres Host
+  if (myRole === 1) {
+    level2SafeIndex = Math.floor(Math.random() * 3);
+    level3Order = [0, 1, 2].sort(() => Math.random() - 0.5);
+  }
+
+  showBriefing(1);
+}
+
+// BRIEFINGS DE LOS 5 NIVELES
+function showBriefing(lvl) {
+  isBriefingActive = true;
+  const modal = document.getElementById('briefing-modal');
+  const title = document.getElementById('briefing-title');
+  const desc = document.getElementById('briefing-desc');
+  document.getElementById('hud-level').textContent = `NIVEL ${lvl}/5`;
+
+  if (lvl === 1) {
+    title.textContent = "NIVEL 1/5: RESONANCIA RÚNICA DOBLE";
+    desc.textContent = "Estáis en alas separadas. Los cristales alternan colores mágicos. Debéis pisar los dos altares cuando coincidan exactamente en el MISMO COLOR en 2 ocasiones para abrir el portal central. Si erráis, la bestia se acercará.";
+    document.getElementById('mission-guide').textContent = `OBJETIVO: Sincronizad el mismo color (${level1CurrentMatches}/${level1MatchesNeeded})`;
+  } else if (lvl === 2) {
+    title.textContent = "NIVEL 2/5: EL CAMINO DE LAS BALDOSAS ALEATORIAS";
+    desc.textContent = "El Jugador 1 tiene 3 baldosas rúnicas. En esta partida la runa segura ha cambiado aleatoriamente. El Jugador 2 tiene en su Tablilla Secreta cuál es la única segura. ¡Hablad por voz para no activar la trampa!";
+    document.getElementById('mission-guide').textContent = "OBJETIVO: P2 lee la tablilla y guía por voz a P1";
+  } else if (lvl === 3) {
+    title.textContent = "NIVEL 3/5: LA SECUENCIA DE ANTORCHAS MÍSTICAS";
+    desc.textContent = "Hay 3 peanas de fuego místico. El orden sagrado ha cambiado al azar. El Jugador 1 ve en su tablilla la secuencia exacta de 3 pasos que Jugador 2 debe encender. Si se equivoca, la bestia alertará.";
+    document.getElementById('mission-guide').textContent = "OBJETIVO: Encended las antorchas en la secuencia dictada por tu compañero";
+  } else if (lvl === 4) {
+    title.textContent = "NIVEL 4/5: LAS PALANCAS DE PRESIÓN INVERTIDA";
+    desc.textContent = "Hay dos palancas de piedra situadas en alas opuestas de la cripta. Para desbloquear la reja, ambos debéis pulsar vuestra palanca al MISMO TIEMPO (dentro de un margen de 2 segundos). ¡Haced una cuenta atrás por voz!";
+    document.getElementById('mission-guide').textContent = "OBJETIVO: Accionad ambas palancas doradas simultáneamente";
+  } else if (lvl === 5) {
+    title.textContent = "NIVEL 5/5: EL RITUAL DE LAS 3 RELIQUIAS";
+    desc.textContent = "La bestia merodea en las sombras. En tres esquinas lejanas del mapa hay 3 reliquias brillantes (Púrpura, Azul y Dorada). Explorad la cripta y recoged las 3 reliquias para hacer aparecer la Cruz Definitiva de Escape.";
+    document.getElementById('mission-guide').textContent = "OBJETIVO FINAL: Buscad y recoged las 3 reliquias brillantes (0/3)";
+  }
+
+  modal.style.display = 'flex';
+  if (document.pointerLockElement === document.body) document.exitPointerLock();
+}
+
+function dismissBriefing() {
+  document.getElementById('briefing-modal').style.display = 'none';
+  isBriefingActive = false;
+  if (!isMobile && inGame) document.body.requestPointerLock();
+}
+
+function setThreat(val) {
+  threatLevel = val;
+  const thEl = document.getElementById('hud-threat');
+  if (threatLevel === 0) {
+    thEl.textContent = "BESTIA: CALMADA";
+    thEl.style.color = "#4ade80";
+  } else if (threatLevel === 1) {
+    thEl.textContent = "BESTIA: ALERTA (1/3)";
+    thEl.style.color = "#fbbf24";
+    playBeastRoar(1);
+  } else if (threatLevel === 2) {
+    thEl.textContent = "BESTIA: EN CAMINO (2/3)";
+    thEl.style.color = "#ef4444";
+    playBeastRoar(1.5);
+  } else if (threatLevel >= 3) {
+    triggerJumpscare();
+  }
+}
+
+function triggerJumpscare() {
+  playJumpscareSound();
+  const screen = document.getElementById('jumpscare-screen');
+  screen.style.display = 'flex';
+
+  setTimeout(() => {
+    screen.style.display = 'none';
+    setThreat(0);
+    playerPos.set(myRole === 1 ? -18 : 18, 0, myRole === 1 ? -18 : 18);
+  }, 2200);
+}
+
+// --- TEXTURAS PROCEDURALES HD ---
+function createTexture(type) {
+  const c = document.createElement('canvas');
+  c.width = 512; c.height = 512;
+  const ctx = c.getContext('2d');
+
+  if (type === 'stone') {
+    ctx.fillStyle = '#353042'; ctx.fillRect(0, 0, 512, 512);
+    for (let y = 0; y < 512; y += 64) {
+      const offset = (y / 64) % 2 === 0 ? 0 : 64;
+      for (let x = -offset; x < 512; x += 128) {
+        ctx.strokeStyle = '#1d1926'; ctx.lineWidth = 4;
+        ctx.strokeRect(x, y, 128, 64);
+        ctx.fillStyle = Math.random() < 0.25 ? 'rgba(65, 125, 80, 0.28)' : 'rgba(85, 75, 70, 0.25)';
+        ctx.fillRect(x + 4, y + 4, 120, 56);
+      }
+    }
+  } else if (type === 'crypt_floor') {
+    ctx.fillStyle = '#24202c'; ctx.fillRect(0, 0, 512, 512);
+    for (let x = 0; x < 512; x += 32) {
+      for (let y = 0; y < 512; y += 32) {
+        ctx.strokeStyle = '#3a3447'; ctx.strokeRect(x, y, 32, 32);
+      }
+    }
+  } else if (type === 'gate') {
+    ctx.fillStyle = '#141120'; ctx.fillRect(0, 0, 512, 512);
+    ctx.strokeStyle = '#c084fc'; ctx.lineWidth = 6;
+    for (let x = 16; x < 512; x += 32) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 512); ctx.stroke();
+    }
+  } else if (type === 'linen') {
+    ctx.fillStyle = '#e8dec2'; ctx.fillRect(0, 0, 512, 512);
+    for (let y = 0; y < 512; y += 12) {
+      ctx.strokeStyle = 'rgba(120, 105, 80, 0.35)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(512, y); ctx.stroke();
+    }
+  }
+
+  const texture = new THREE.CanvasTexture(c);
+  texture.wrapS = THREE.RepeatWrapping; texture.wrapT = THREE.RepeatWrapping;
+  return texture;
+}
+
+const wallTex = createTexture('stone'); wallTex.repeat.set(4, 2);
+const floorTex = createTexture('crypt_floor'); floorTex.repeat.set(16, 16);
+const gateTex = createTexture('gate'); gateTex.repeat.set(2, 2);
+const linenTex = createTexture('linen'); linenTex.repeat.set(2, 4);
+
+// --- ESCENA THREE.JS ---
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x191428);
+scene.fog = new THREE.FogExp2(0x191428, 0.022);
+
+const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 130);
+const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('webgl-canvas'), antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+const ambientLight = new THREE.AmbientLight(0x8b5cf6, 1.0);
+scene.add(ambientLight);
+
+const dirLight = new THREE.DirectionalLight(0xffedd5, 0.65);
+dirLight.position.set(15, 35, 15);
+scene.add(dirLight);
+
+const torches = [];
+function addTorch(x, y, z) {
+  const torchLight = new THREE.PointLight(0xf59e0b, 2.2, 14);
+  torchLight.position.set(x, y, z);
+  scene.add(torchLight);
+
+  const flame = new THREE.Mesh(
+    new THREE.SphereGeometry(0.14, 8, 8),
+    new THREE.MeshBasicMaterial({ color: 0xfbbf24 })
+  );
+  flame.position.set(x, y, z);
+  scene.add(flame);
+  torches.push({ light: torchLight, baseY: y });
+}
+
+addTorch(-15, 2.5, -15); addTorch(15, 2.5, 15);
+addTorch(-15, 2.5, 15);  addTorch(15, 2.5, -15);
+addTorch(0, 3.0, 5);     addTorch(0, 3.0, -5);
+
+const floorGeo = new THREE.PlaneGeometry(50, 50);
+const floorMat = new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.45, metalness: 0.2 });
+const floor = new THREE.Mesh(floorGeo, floorMat);
+floor.rotation.x = -Math.PI / 2;
+scene.add(floor);
+
+const ceil = new THREE.Mesh(floorGeo, new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.9 }));
+ceil.position.y = 4.2; ceil.rotation.x = Math.PI / 2;
+scene.add(ceil);
+
+const wallMat = new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.8 });
+const walls = [];
+function makeWall(x, z, w, d, h = 4.2) {
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallMat);
+  mesh.position.set(x, h / 2, z);
+  scene.add(mesh);
+  walls.push({ x, z, w, d });
+  return mesh;
+}
+
+makeWall(0, -25, 50, 1.5); makeWall(0, 25, 50, 1.5);
+makeWall(-25, 0, 1.5, 50); makeWall(25, 0, 1.5, 50);
+makeWall(-10, -10, 12, 1.5); makeWall(10, 10, 12, 1.5);
+makeWall(-10, 8, 1.5, 14); makeWall(10, -8, 1.5, 14);
+makeWall(0, -16, 1.5, 16); makeWall(0, 16, 1.5, 16);
+
+// Puerta Reja Central
+const door = new THREE.Mesh(new THREE.BoxGeometry(8, 4.2, 1.0), new THREE.MeshStandardMaterial({ map: gateTex, roughness: 0.3, metalness: 0.7 }));
+door.position.set(0, 2.1, 0);
+scene.add(door);
+
+// Cruz Central (0, 0)
+const crossGroup = new THREE.Group();
+const crossBar1 = new THREE.Mesh(new THREE.BoxGeometry(5.0, 0.08, 1.2), new THREE.MeshBasicMaterial({ color: 0x22c55e }));
+crossBar1.position.y = 0.05; crossGroup.add(crossBar1);
+const crossBar2 = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.08, 5.0), new THREE.MeshBasicMaterial({ color: 0x22c55e }));
+crossBar2.position.y = 0.05; crossGroup.add(crossBar2);
+const ring = new THREE.Mesh(new THREE.RingGeometry(2.6, 2.9, 32), new THREE.MeshBasicMaterial({ color: 0x4ade80, side: THREE.DoubleSide }));
+ring.rotation.x = -Math.PI / 2; ring.position.y = 0.06; crossGroup.add(ring);
+const lightBeam = new THREE.PointLight(0x22c55e, 0, 15);
+lightBeam.position.set(0, 2.5, 0); crossGroup.add(lightBeam);
+crossGroup.position.set(0, 0, 0); crossGroup.visible = false;
+scene.add(crossGroup);
+
+// Altares Nivel 1
+const PUZZLE_COLORS = [0x38bdf8, 0xef4444, 0x10b981, 0xfacc15];
+function makeAltar(x, z) {
+  const group = new THREE.Group();
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.5, 1.2, 8), new THREE.MeshStandardMaterial({ color: 0x332c44 }));
+  base.position.y = 0.6; group.add(base);
+
+  const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.58, 0), new THREE.MeshStandardMaterial({ color: PUZZLE_COLORS[0], emissive: PUZZLE_COLORS[0], emissiveIntensity: 1.1 }));
+  crystal.position.y = 1.7; group.add(crystal);
+
+  const light = new THREE.PointLight(PUZZLE_COLORS[0], 3.2, 12);
+  light.position.y = 2.0; group.add(light);
+
+  group.position.set(x, 0, z);
+  scene.add(group);
+  return { group, crystal, light, x, z, colorIdx: 0 };
+}
+
+const altar1 = makeAltar(-20, 20);
+const altar2 = makeAltar(20, -20);
+
+function applyAltarColors(c1, c2) {
+  altar1.colorIdx = c1; altar2.colorIdx = c2;
+  const col1 = PUZZLE_COLORS[c1]; const col2 = PUZZLE_COLORS[c2];
+  altar1.crystal.material.color.setHex(col1); altar1.crystal.material.emissive.setHex(col1); altar1.light.color.setHex(col1);
+  altar2.crystal.material.color.setHex(col2); altar2.crystal.material.emissive.setHex(col2); altar2.light.color.setHex(col2);
+}
+
+// Baldosas Nivel 2
+const runeTiles = [];
+function createRuneFloor() {
+  const colors = [0x3b82f6, 0xef4444, 0x10b981];
+  for (let i = 0; i < 3; i++) {
+    const tileGroup = new THREE.Group();
+    const tile = new THREE.Mesh(
+      new THREE.BoxGeometry(2.6, 0.16, 2.6),
+      new THREE.MeshStandardMaterial({ color: 0x221c32, emissive: colors[i], emissiveIntensity: 0.55 })
+    );
+    tileGroup.add(tile);
+
+    const border = new THREE.Mesh(
+      new THREE.BoxGeometry(2.8, 0.1, 2.8),
+      new THREE.MeshStandardMaterial({ color: 0x475569 })
+    );
+    border.position.y = -0.04;
+    tileGroup.add(border);
+
+    tileGroup.position.set(-6 + i * 6, 0.08, -6);
+    tileGroup.visible = false;
+    scene.add(tileGroup);
+
+    runeTiles.push({ group: tileGroup, color: colors[i], index: i, x: -6 + i * 6, z: -6 });
+  }
+}
+createRuneFloor();
+
+// Peanas Nivel 3 (Posiciones 100% despejadas)
+const pedestals = [];
+const pedestalCoords = [
+  { x: 12, z: 4 },
+  { x: 4, z: -8 },
+  { x: -12, z: -4 }
+];
+
+// Nivel 4: Palancas Rúnicas Simultáneas
+const lever1 = { x: -14, z: 12, active: false };
+const lever2 = { x: 14, z: -12, active: false };
+
+function createLevers() {
+  const g1 = new THREE.Group();
+  const b1 = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.6, 1.2, 8), new THREE.MeshStandardMaterial({ color: 0x334155 }));
+  b1.position.y = 0.6; g1.add(b1);
+  const handle1 = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.8, 0.3), new THREE.MeshStandardMaterial({ color: 0xf59e0b }));
+  handle1.position.y = 1.3; g1.add(handle1);
+  g1.position.set(lever1.x, 0, lever1.z);
+  g1.visible = false; scene.add(g1);
+  lever1.group = g1; lever1.mesh = handle1;
+
+  const g2 = new THREE.Group();
+  const b2 = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.6, 1.2, 8), new THREE.MeshStandardMaterial({ color: 0x334155 }));
+  b2.position.y = 0.6; g2.add(b2);
+  const handle2 = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.8, 0.3), new THREE.MeshStandardMaterial({ color: 0xf59e0b }));
+  handle2.position.y = 1.3; g2.add(handle2);
+  g2.position.set(lever2.x, 0, lever2.z);
+  g2.visible = false; scene.add(g2);
+  lever2.group = g2; lever2.mesh = handle2;
+}
+createLevers();
+
+// Nivel 5: 3 Reliquias Místicas Ocultas en Esquinas
+const relics = [];
+let relicsCount = 0;
+function createRelics() {
+  const coords = [
+    { x: -18, z: 18, color: 0xa855f7 },
+    { x: 18, z: 18, color: 0x38bdf8 },
+    { x: 0, z: -18, color: 0xfacc15 }
+  ];
+  coords.forEach((c, i) => {
+    const rGroup = new THREE.Group();
+    const orb = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(0.4, 0),
+      new THREE.MeshStandardMaterial({ color: c.color, emissive: c.color, emissiveIntensity: 0.9 })
+    );
+    orb.position.y = 1.2; rGroup.add(orb);
+    const rLight = new THREE.PointLight(c.color, 2.5, 7);
+    rLight.position.y = 1.4; rGroup.add(rLight);
+    rGroup.position.set(c.x, 0, c.z);
+    rGroup.visible = false;
+    scene.add(rGroup);
+    relics.push({ group: rGroup, mesh: orb, light: rLight, x: c.x, z: c.z, collected: false });
+  });
+}
+createRelics();
+
+function createPedestals() {
+  for (let i = 0; i < 3; i++) {
+    const coord = pedestalCoords[i];
+    const pGroup = new THREE.Group();
+    
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.0, 1.1, 10), new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.7 }));
+    base.position.y = 0.55; pGroup.add(base);
+
+    const plate = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 0.7, 0.15, 10), new THREE.MeshStandardMaterial({ color: 0xb45309, metalness: 0.8 }));
+    plate.position.y = 1.15; pGroup.add(plate);
+
+    const fire = new THREE.Mesh(new THREE.SphereGeometry(0.25, 8, 8), new THREE.MeshBasicMaterial({ color: 0x38bdf8 }));
+    fire.position.y = 1.35; pGroup.add(fire);
+
+    const pLight = new THREE.PointLight(0x38bdf8, 2.5, 8);
+    pLight.position.y = 1.6; pGroup.add(pLight);
+
+    pGroup.position.set(coord.x, 0, coord.z);
+    pGroup.visible = false;
+    scene.add(pGroup);
+    pedestals.push({ group: pGroup, light: pLight, fire: fire, active: false, x: coord.x, z: coord.z, index: i });
+  }
+}
+createPedestals();
+
+// --- ESCULTURA DE MONSTRUOS (FRENTE HACIA -Z) ---
+function buildOrganicMonster(type) {
+  const root = new THREE.Group();
+  const parts = { legL: null, legR: null, armL: null, armR: null };
+
+  if (type === 'skeleton') {
+    const boneMat = new THREE.MeshStandardMaterial({ color: 0xf5f2eb, roughness: 0.55 });
+    const blueFire = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+
+    function makeLimb(x, isArm) {
+      const g = new THREE.Group(); g.position.set(x, isArm ? 1.5 : 0.9, 0);
+      const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.045, isArm ? 0.38 : 0.45, 8), boneMat);
+      upper.position.y = isArm ? -0.2 : -0.22; g.add(upper);
+      const lower = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.04, isArm ? 0.35 : 0.42, 8), boneMat);
+      lower.position.y = isArm ? -0.6 : -0.68; g.add(lower);
+      if (!isArm) {
+        const foot = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.06, 0.22), boneMat);
+        foot.position.set(0, -0.9, -0.06);
+        g.add(foot);
+      }
+      return g;
+    }
+
+    parts.legL = makeLimb(-0.22, false); root.add(parts.legL);
+    parts.legR = makeLimb(0.22, false);  root.add(parts.legR);
+    parts.armL = makeLimb(-0.36, true);  root.add(parts.armL);
+    parts.armR = makeLimb(0.36, true);   root.add(parts.armR);
+
+    const pelvis = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.2, 0.16, 8), boneMat);
+    pelvis.position.y = 0.98; root.add(pelvis);
+
+    for (let r = 0; r < 5; r++) {
+      const rib = new THREE.Mesh(new THREE.TorusGeometry(0.24 - r * 0.015, 0.032, 6, 14, Math.PI * 1.5), boneMat);
+      rib.position.set(0, 1.18 + r * 0.08, 0.02);
+      rib.rotation.set(Math.PI / 2, 0, Math.PI * 0.75);
+      root.add(rib);
+    }
+
+    const skull = new THREE.Group(); skull.position.set(0, 1.78, 0);
+    skull.add(new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 12), boneMat));
+    [-0.07, 0.07].forEach(ox => {
+      const flame = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 8), blueFire);
+      flame.position.set(ox, 0.02, -0.24); skull.add(flame);
+    });
+    root.add(skull);
+
+  } else if (type === 'mummy') {
+    const wrapMat = new THREE.MeshStandardMaterial({ map: linenTex, roughness: 0.9 });
+    const goldMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.85 });
+    const eyeMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
+
+    function makeLeg(x) {
+      const g = new THREE.Group(); g.position.set(x, 0.9, 0);
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.13, 0.9, 10), wrapMat);
+      leg.position.y = -0.45; g.add(leg);
+      return g;
+    }
+    parts.legL = makeLeg(-0.22); root.add(parts.legL);
+    parts.legR = makeLeg(0.22);  root.add(parts.legR);
+
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.82, 0.42), wrapMat);
+    torso.position.y = 1.25; root.add(torso);
+
+    const collar = new THREE.Mesh(new THREE.TorusGeometry(0.25, 0.07, 8, 16), goldMat);
+    collar.position.set(0, 1.56, -0.08); collar.rotation.x = Math.PI / 3; root.add(collar);
+
+    const head = new THREE.Group(); head.position.set(0, 1.82, 0);
+    head.add(new THREE.Mesh(new THREE.SphereGeometry(0.26, 12, 12), wrapMat));
+    [-0.07, 0.07].forEach(ox => {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), eyeMat);
+      eye.position.set(ox, 0.02, -0.25); head.add(eye);
+    });
+    root.add(head);
+
+    function makeArm(x) {
+      const g = new THREE.Group(); g.position.set(x, 1.48, 0);
+      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.09, 0.72, 8), wrapMat);
+      arm.position.set(0, -0.25, -0.2); arm.rotation.x = Math.PI / 3.5; g.add(arm);
+      return g;
+    }
+    parts.armL = makeArm(-0.4); root.add(parts.armL);
+    parts.armR = makeArm(0.4);  root.add(parts.armR);
+
+  } else if (type === 'witch') {
+    const robeMat = new THREE.MeshStandardMaterial({ color: 0x4c1d95, roughness: 0.6 });
+    const hatMat = new THREE.MeshStandardMaterial({ color: 0x09090b, roughness: 0.5 });
+    const emeraldMat = new THREE.MeshBasicMaterial({ color: 0x10b981 });
+
+    const skirt = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.1, 12), robeMat);
+    skirt.position.y = 0.55; root.add(skirt);
+
+    const head = new THREE.Group(); head.position.set(0, 1.72, 0);
+    head.add(new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 12), new THREE.MeshStandardMaterial({ color: 0x86efac })));
+
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.04, 18), hatMat);
+    brim.position.y = 0.18; head.add(brim);
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.75, 12), hatMat);
+    cone.position.set(0, 0.58, 0.04); cone.rotation.x = 0.18; head.add(cone);
+    root.add(head);
+
+    parts.legL = new THREE.Group(); parts.legL.position.set(-0.15, 0.5, 0);
+    parts.legR = new THREE.Group(); parts.legR.position.set(0.15, 0.5, 0);
+
+    function makeArm(x) {
+      const g = new THREE.Group(); g.position.set(x, 1.45, 0);
+      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.09, 0.65, 8), robeMat);
+      arm.position.y = -0.28; g.add(arm); return g;
+    }
+    parts.armL = makeArm(-0.38); root.add(parts.armL);
+    parts.armR = makeArm(0.38);  root.add(parts.armR);
+
+    const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.7, 8), new THREE.MeshStandardMaterial({ color: 0x54260d }));
+    staff.position.set(0.48, 1.0, -0.25); root.add(staff);
+    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 10), emeraldMat);
+    orb.position.set(0.48, 1.85, -0.25); root.add(orb);
+    const orbLight = new THREE.PointLight(0x10b981, 2.5, 8);
+    orbLight.position.copy(orb.position); root.add(orbLight);
+  }
+
+  const aura = new THREE.PointLight(0xf8fafc, 3.5, 18);
+  aura.position.set(0, 1.7, 0); root.add(aura);
+  return { root, parts, type };
+}
+
+let localModel = null, remoteModel = null;
+const localPlayer = new THREE.Group(); scene.add(localPlayer);
+const remotePlayer = new THREE.Group(); scene.add(remotePlayer);
+
+function rebuildLocalCharacter(type) {
+  if (localModel) localPlayer.remove(localModel.root);
+  localModel = buildOrganicMonster(type); localPlayer.add(localModel.root);
+}
+function rebuildRemoteCharacter(type) {
+  if (remoteModel) remotePlayer.remove(remoteModel.root);
+  remoteModel = buildOrganicMonster(type); remotePlayer.add(remoteModel.root);
+}
+
+rebuildLocalCharacter('skeleton');
+rebuildRemoteCharacter('mummy');
+
+function animateModel(modelObj, isWalking) {
+  if (!modelObj || !modelObj.parts) return;
+  const t = performance.now() * 0.009;
+  const swing = isWalking ? Math.sin(t) * 0.45 : 0;
+  if (modelObj.parts.legL && modelObj.parts.legR) {
+    modelObj.parts.legL.rotation.x = swing; modelObj.parts.legR.rotation.x = -swing;
+  }
+  if (modelObj.parts.armL && modelObj.parts.armR) {
+    modelObj.parts.armL.rotation.x = -swing; modelObj.parts.armR.rotation.x = swing;
+  }
+}
+
+// --- CÁMARA HÍBRIDA: SEGUIMIENTO AUTOMÁTICO + CONTROL MANUAL LIBRE ---
+let playerPos = new THREE.Vector3(-18, 0, -18);
+let camYaw = 0, camPitch = 0.22, camDist = 4.2;
+
+// Variable para saber si el usuario está rotando la cámara con el dedo o ratón
+let isManualCamOrbit = false;
+let manualCamTimer = 0;
+
+document.body.addEventListener('click', (e) => {
+  if (!isMobile && inGame && !isBriefingActive && document.getElementById('settings-screen').style.display !== 'flex' && document.getElementById('victory-modal').style.display !== 'flex' && !e.target.closest('.hud-btn') && !e.target.closest('#minimap-wrap')) {
+    document.body.requestPointerLock();
+  }
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (document.pointerLockElement === document.body) {
+    camYaw -= e.movementX * 0.003;
+    camPitch += e.movementY * 0.0022;
+    camPitch = Math.max(-0.4, Math.min(0.85, camPitch));
+    isManualCamOrbit = true;
+    manualCamTimer = performance.now();
+  }
+});
+
+window.addEventListener('wheel', (e) => {
+  if (inGame) {
+    camDist += e.deltaY * 0.003;
+    camDist = Math.max(1.8, Math.min(7.5, camDist));
+  }
+});
+
+const keys = {};
+window.addEventListener('keydown', e => { keys[e.code] = true; });
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+// UN SOLO JOYSTICK TÁCTIL (IZQUIERDO)
+let touchMoveVec = { x: 0, y: 0 };
+const padMove = document.getElementById('pad-move');
+const nipMove = document.getElementById('nip-move');
+
+padMove.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  const r = padMove.getBoundingClientRect();
+  const t = e.touches[0];
+  const dx = t.clientX - (r.left + r.width / 2);
+  const dy = t.clientY - (r.top + r.height / 2);
+  const d = Math.hypot(dx, dy);
+  const max = 40;
+  const cx = d > max ? (dx / d) * max : dx;
+  const cy = d > max ? (dy / d) * max : dy;
+  nipMove.style.transform = `translate(${cx}px, ${cy}px)`;
+  touchMoveVec.x = cx / max;
+  touchMoveVec.y = -cy / max;
+});
+
+padMove.addEventListener('touchend', () => {
+  nipMove.style.transform = 'translate(0,0)';
+  touchMoveVec.x = 0;
+  touchMoveVec.y = 0;
+});
+
+// CONTROL TÁCTIL DE CÁMARA (Lado derecho de la pantalla):
+// Permite mover la cámara en 360° con el dedo en cualquier momento
+let touchCamStart = null;
+let touchCamYStart = null;
+
+window.addEventListener('touchstart', (e) => {
+  if (isMobile && e.touches[0].clientX > window.innerWidth * 0.40 && !e.target.closest('#minimap-wrap') && !e.target.closest('.hud-btn')) {
+    touchCamStart = e.touches[0].clientX;
+    touchCamYStart = e.touches[0].clientY;
+    isManualCamOrbit = true;
+  }
+});
+
+window.addEventListener('touchmove', (e) => {
+  if (isMobile && touchCamStart !== null) {
+    const diffX = e.touches[0].clientX - touchCamStart;
+    const diffY = e.touches[0].clientY - touchCamYStart;
+    camYaw -= diffX * 0.0028;
+    camPitch += diffY * 0.0022;
+    camPitch = Math.max(-0.4, Math.min(0.85, camPitch));
+    touchCamStart = e.touches[0].clientX;
+    touchCamYStart = e.touches[0].clientY;
+    isManualCamOrbit = true;
+    manualCamTimer = performance.now();
+  }
+});
+
+window.addEventListener('touchend', () => {
+  touchCamStart = null;
+  touchCamYStart = null;
+});
+
+function readGamepad() {
+  const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+  if (!gamepads || !gamepads[0]) return null;
+  const gp = gamepads[0];
+  const deadzone = 0.15;
+  let moveX = Math.abs(gp.axes[0]) > deadzone ? gp.axes[0] : 0;
+  let moveY = Math.abs(gp.axes[1]) > deadzone ? -gp.axes[1] : 0;
+  let lookX = Math.abs(gp.axes[2]) > deadzone ? gp.axes[2] : 0;
+  let lookY = Math.abs(gp.axes[3]) > deadzone ? gp.axes[3] : 0;
+
+  if (lookX !== 0 || lookY !== 0) {
+    isManualCamOrbit = true;
+    manualCamTimer = performance.now();
+  }
+
+  if (gp.buttons[9] && gp.buttons[9].pressed) {
+    const modal = document.getElementById('settings-screen');
+    toggleSettingsModal(modal.style.display !== 'flex');
+  }
+  return { moveX, moveY, lookX, lookY };
+}
+
+function canMoveTo(nx, nz) {
+  const r = 0.65;
+  for (const w of walls) {
+    if (nx + r > w.x - w.w / 2 && nx - r < w.x + w.w / 2 &&
+        nz + r > w.z - w.d / 2 && nz - r < w.z + w.d / 2) {
+      return false;
+    }
+  }
+  if (!doorUnlocked) {
+    if (nx + r > -4 && nx - r < 4 && nz + r > -0.6 && nz - r < 0.6) return false;
+  }
+  return true;
+}
+
+let doorUnlocked = false;
+
+function applyDoorUnlock() {
+  doorUnlocked = true;
+  crossGroup.visible = true;
+  lightBeam.intensity = 4.5;
+  document.getElementById('hud-threat').textContent = "PORTAL ABIERTO";
+  document.getElementById('hud-threat').style.color = "#a855f7";
+  document.getElementById('mission-guide').textContent = "¡PORTAL ABIERTO! ✚ Entrad los DOS dentro de la CRUZ VERDE central";
+}
+
+function triggerVictoryScreen() {
+  inGame = false;
+  stopAtmosphereMusic();
+  if (document.pointerLockElement === document.body) document.exitPointerLock();
+  document.getElementById('victory-modal').style.display = 'flex';
+}
+
+function applyLoadLevel(lvl) {
+  currentLevel = lvl;
+  doorUnlocked = false;
+  door.position.set(0, 2.1, 0);
+  crossGroup.visible = false;
+  lightBeam.intensity = 0;
+  pedestalStep = 0;
+  level1CurrentMatches = 0;
+
+  document.getElementById('hud-threat').textContent = "BESTIA: CALMADA";
+  document.getElementById('hud-threat').style.color = "#4ade80";
+
+  altar1.group.visible = (lvl === 1);
+  altar2.group.visible = (lvl === 1);
+  runeTiles.forEach(t => t.group.visible = (lvl === 2));
+  pedestals.forEach(p => {
+    p.group.visible = (lvl === 3);
+    p.active = false;
+    p.fire.material.color.setHex(0x38bdf8);
+    p.light.color.setHex(0x38bdf8);
+  });
+
+  // Configuración de pistas aleatorias en la tablilla
+  if (lvl === 2) {
+    if (myRole === 2) {
+      document.getElementById('clue-board').style.display = 'block';
+      const safeRune = RUNE_NAMES[level2SafeIndex];
+      document.getElementById('clue-board').textContent = `📜 TABLILLA SECRETA: Dile a tu compañero que pise la runa: ${safeRune.icon} ${safeRune.name}`;
+    } else {
+      document.getElementById('clue-board').style.display = 'none';
+    }
+  } else if (lvl === 3) {
+    if (myRole === 1) {
+      document.getElementById('clue-board').style.display = 'block';
+      const seqStr = level3Order.map(idx => ROMAN_LABELS[idx]).join(' -> ');
+      document.getElementById('clue-board').textContent = `📜 TABLILLA: Secuencia aleatoria: ${seqStr}`;
+    } else {
+      document.getElementById('clue-board').style.display = 'none';
+    }
+  } else if (lvl === 4) {
+    if (myRole === 2) {
+      document.getElementById('clue-board').style.display = 'block';
+      document.getElementById('clue-board').textContent = "📜 TABLILLA: Guía por voz: el camino despejado rodea por la derecha";
+    } else {
+      document.getElementById('clue-board').style.display = 'none';
+    }
+  } else if (lvl === 5) {
+    document.getElementById('clue-board').style.display = 'block';
+    document.getElementById('clue-board').textContent = "🤫 SILENCIO: La bestia duerme. Cruzad la cruz central agachados.";
+  } else {
+    document.getElementById('clue-board').style.display = 'none';
+  }
+
+  playerPos.set(myRole === 1 ? -18 : 18, 0, myRole === 1 ? -18 : 18);
+  showBriefing(lvl);
+}
+
+// --- MINIMAPA FIJO CON EXPLORACIÓN TÁCTIL (PAN & SCAN) ---
+const mWrap = document.getElementById('minimap-wrap');
+const mCanvas = document.getElementById('minimap-canvas');
+const mCtx = mCanvas.getContext('2d');
+const btnRecenter = document.getElementById('btn-recenter-map');
+
+let mapPanX = 0;
+let mapPanY = 0;
+let isPanningMap = false;
+let panStartTouch = { x: 0, y: 0 };
+let autoRecenterTimer = null;
+
+function recenterMinimap() {
+  mapPanX = 0;
+  mapPanY = 0;
+  btnRecenter.style.display = 'none';
+}
+
+function onMapPanStart(clientX, clientY) {
+  isPanningMap = true;
+  panStartTouch.x = clientX;
+  panStartTouch.y = clientY;
+  btnRecenter.style.display = 'block';
+  if (autoRecenterTimer) clearTimeout(autoRecenterTimer);
+}
+
+function onMapPanMove(clientX, clientY) {
+  if (!isPanningMap) return;
+  const dx = clientX - panStartTouch.x;
+  const dy = clientY - panStartTouch.y;
+  mapPanX += dx * 0.45;
+  mapPanY += dy * 0.45;
+  panStartTouch.x = clientX;
+  panStartTouch.y = clientY;
+  mapPanX = Math.max(-45, Math.min(45, mapPanX));
+  mapPanY = Math.max(-45, Math.min(45, mapPanY));
+}
+
+function onMapPanEnd() {
+  isPanningMap = false;
+  if (autoRecenterTimer) clearTimeout(autoRecenterTimer);
+  autoRecenterTimer = setTimeout(recenterMinimap, 3500);
+}
+
+mWrap.addEventListener('mousedown', (e) => onMapPanStart(e.clientX, e.clientY));
+window.addEventListener('mousemove', (e) => onMapPanMove(e.clientX, e.clientY));
+window.addEventListener('mouseup', onMapPanEnd);
+
+mWrap.addEventListener('touchstart', (e) => {
+  const t = e.touches[0];
+  onMapPanStart(t.clientX, t.clientY);
+}, { passive: false });
+window.addEventListener('touchmove', (e) => {
+  if (isPanningMap && e.touches[0]) {
+    onMapPanMove(e.touches[0].clientX, e.touches[0].clientY);
+  }
+}, { passive: false });
+window.addEventListener('touchend', onMapPanEnd);
+
+function renderMinimap() {
+  mCtx.clearRect(0, 0, 125, 125);
+  const cx = 62.5 + mapPanX, cy = 62.5 + mapPanY, scale = 1.9;
+
+  // Muros
+  mCtx.fillStyle = '#64748b';
+  walls.forEach(w => {
+    const mx = cx + (w.x - playerPos.x) * scale;
+    const my = cy + (w.z - playerPos.z) * scale;
+    mCtx.fillRect(mx - (w.w/2)*scale, my - (w.d/2)*scale, w.w*scale, w.d*scale);
+  });
+
+  // Reja central
+  mCtx.fillStyle = doorUnlocked ? '#22c55e' : '#ef4444';
+  const dx = cx + (0 - playerPos.x) * scale;
+  const dy = cy + (0 - playerPos.z) * scale;
+  mCtx.fillRect(dx - 4*scale, dy - 0.5*scale, 8*scale, 1.0*scale);
+
+  // Cruz central
+  if (crossGroup.visible) {
+    mCtx.fillStyle = '#4ade80';
+    mCtx.fillRect(dx - 3*scale, dy - 0.8*scale, 6*scale, 1.6*scale);
+    mCtx.fillRect(dx - 0.8*scale, dy - 3*scale, 1.6*scale, 6*scale);
+  }
+
+  // Peanas Nivel 3
+  if (currentLevel === 3) {
+    pedestals.forEach(p => {
+      const px = cx + (p.x - playerPos.x) * scale;
+      const py = cy + (p.z - playerPos.z) * scale;
+      mCtx.fillStyle = p.active ? '#22c55e' : '#38bdf8';
+      mCtx.beginPath();
+      mCtx.arc(px, py, 3.5, 0, Math.PI * 2);
+      mCtx.fill();
+    });
+  }
+
+  // Palancas Nivel 4 en minimapa
+  if (currentLevel === 4) {
+    [lever1, lever2].forEach(l => {
+      const lx = cx + (l.x - playerPos.x) * scale;
+      const ly = cy + (l.z - playerPos.z) * scale;
+      mCtx.fillStyle = l.active ? '#22c55e' : '#f59e0b';
+      mCtx.fillRect(lx - 3, ly - 3, 6, 6);
+    });
+  }
+
+  // Reliquias Nivel 5 en minimapa
+  if (currentLevel === 5) {
+    relics.forEach(r => {
+      if (!r.collected) {
+        const rx = cx + (r.x - playerPos.x) * scale;
+        const ry = cy + (r.z - playerPos.z) * scale;
+        mCtx.fillStyle = '#facc15';
+        mCtx.beginPath();
+        mCtx.arc(rx, ry, 4, 0, Math.PI * 2);
+        mCtx.fill();
+      }
+    });
+  }
+
+  // Compañero
+  const rx = cx + (remotePlayer.position.x - playerPos.x) * scale;
+  const ry = cy + (remotePlayer.position.z - playerPos.z) * scale;
+  mCtx.fillStyle = '#fb923c';
+  mCtx.beginPath();
+  mCtx.arc(rx, ry, 4.5, 0, Math.PI * 2);
+  mCtx.fill();
+
+  // Local
+  mCtx.fillStyle = '#c084fc';
+  mCtx.beginPath();
+  mCtx.arc(cx, cy, 5.0, 0, Math.PI * 2);
+  mCtx.fill();
+
+  mCtx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+  mCtx.lineWidth = 2;
+  mCtx.beginPath();
+  mCtx.moveTo(cx, cy);
+  mCtx.lineTo(cx - Math.sin(camYaw) * 15, cy - Math.cos(camYaw) * 15);
+  mCtx.stroke();
+}
+
+let lastNetTick = 0;
+let lastColorCycle = 0;
+let mismatchTimer = 0;
+let tileDebounce = 0;
+
+
+// --- FUNCIONES DE SINCRONIZACIÓN CORREGIDAS (NIVELES 4 Y 5) ---
+let localHoldingLever = null; // 'A', 'B' o null
+let remoteHoldingLever = null; // 'A', 'B' o null
+
+function applyRemoteLeverState(which, isPressed) {
+  remoteHoldingLever = isPressed ? which : null;
+  updateLeverVisuals();
+}
+
+function updateLeverVisuals() {
+  const activeA = (localHoldingLever === 'A' || remoteHoldingLever === 'A');
+  const activeB = (localHoldingLever === 'B' || remoteHoldingLever === 'B');
+
+  lever1.mesh.material.color.setHex(activeA ? 0x22c55e : 0xf59e0b);
+  lever2.mesh.material.color.setHex(activeB ? 0x22c55e : 0xf59e0b);
+}
+
+function applyRemoteRelicPickup(idx) {
+  if (relics[idx] && !relics[idx].collected) {
+    relics[idx].collected = true;
+    relics[idx].mesh.visible = false;
+    relics[idx].light.intensity = 0;
+    relicsCount++;
+    document.getElementById('mission-guide').textContent = `¡RELIQUIA RECOGIDA! (${relicsCount}/3)`;
+    if (relicsCount >= 3) {
+      applyDoorUnlock();
+      document.getElementById('mission-guide').textContent = "¡RITUAL CUMPLIDO! ✚ Cruzad la Cruz Verde para escapar para siempre";
+    }
+  }
+}
+
+function animate(time) {
+  requestAnimationFrame(animate);
+
+  torches.forEach((t, i) => {
+    t.light.intensity = 2.0 + Math.sin(time * 0.005 + i) * 0.3;
+  });
+
+  if (crossGroup.visible) {
+    crossGroup.rotation.y = time * 0.001;
+    lightBeam.intensity = 3.5 + Math.sin(time * 0.006) * 1.0;
+  }
+
+  const gp = readGamepad();
+  if (gp) {
+    camYaw -= gp.lookX * 0.05;
+    camPitch += gp.lookY * 0.04;
+    camPitch = Math.max(-0.4, Math.min(0.85, camPitch));
+  }
+
+  let forward = 0, strafe = 0;
+  if (inGame && !isBriefingActive && document.getElementById('settings-screen').style.display !== 'flex') {
+    if (keys['KeyW'] || keys['ArrowUp']) forward += 1;
+    if (keys['KeyS'] || keys['ArrowDown']) forward -= 1;
+    if (keys['KeyA'] || keys['ArrowLeft']) strafe -= 1;
+    if (keys['KeyD'] || keys['ArrowRight']) strafe += 1;
+
+    if (touchMoveVec.y !== 0) forward += touchMoveVec.y;
+    if (touchMoveVec.x !== 0) strafe += touchMoveVec.x;
+
+    if (gp) {
+      if (gp.moveY !== 0) forward += gp.moveY;
+      if (gp.moveX !== 0) strafe += gp.moveX;
+    }
+  }
+
+  const isMoving = forward !== 0 || strafe !== 0;
+  if (isMoving) {
+    const len = Math.hypot(forward, strafe);
+    const speed = 0.09;
+    const moveX = ((forward / len) * -Math.sin(camYaw) + (strafe / len) * Math.cos(camYaw)) * speed;
+    const moveZ = ((forward / len) * -Math.cos(camYaw) + (strafe / len) * -Math.sin(camYaw)) * speed;
+
+    if (canMoveTo(playerPos.x + moveX, playerPos.z)) playerPos.x += moveX;
+    if (canMoveTo(playerPos.x, playerPos.z + moveZ)) playerPos.z += moveZ;
+
+    // Dirección frontal hacia donde avanza
+    const targetPlayerYaw = Math.atan2(-moveX, -moveZ);
+    localPlayer.rotation.y = targetPlayerYaw;
+
+    // CÁMARA HÍBRIDA:
+    // Solo auto-sigue suavemente si el jugador NO está tocando activamente la pantalla para girar la vista
+    if (!isManualCamOrbit || (time - manualCamTimer > 1800)) {
+      isManualCamOrbit = false;
+      let angleDiff = targetPlayerYaw - camYaw;
+      while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+      while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+      camYaw += angleDiff * 0.032; // Auto-seguimiento suave y fluido
+    }
+  }
+
+  localPlayer.position.copy(playerPos);
+  animateModel(localModel, isMoving);
+
+  // Sincronización de colores Nivel 1
+  if (myRole === 1 && currentLevel === 1 && time - lastColorCycle > 3600) {
+    lastColorCycle = time;
+    const nextC1 = (altar1.colorIdx + 1) % PUZZLE_COLORS.length;
+    const nextC2 = (Math.random() < 0.45) ? nextC1 : Math.floor(Math.random() * PUZZLE_COLORS.length);
+    applyAltarColors(nextC1, nextC2);
+  }
+
+  altar1.crystal.rotation.y += 0.02;
+  if (currentLevel === 5) {
+    relics.forEach((r, idx) => {
+      if (!r.collected) {
+        r.mesh.rotation.y += 0.03;
+        r.mesh.position.y = 1.2 + Math.sin(time * 0.004 + idx) * 0.15;
+      }
+    });
+  }
+  altar2.crystal.rotation.y += 0.02;
+
+  // Cámara Orbital en 3ª Persona (mirando espalda y nuca)
+  camera.position.x = playerPos.x + Math.sin(camYaw) * Math.cos(camPitch) * camDist;
+  camera.position.y = playerPos.y + Math.sin(camPitch) * camDist + 1.6;
+  camera.position.z = playerPos.z + Math.cos(camYaw) * Math.cos(camPitch) * camDist;
+  camera.lookAt(playerPos.x, playerPos.y + 1.35, playerPos.z);
+
+  if (doorUnlocked && door.position.y < 7.0) {
+    door.position.y += 0.04;
+  }
+
+  // DETECCIÓN EXACTA DE LA CRUZ CENTRAL (x:0, z:0)
+  if (doorUnlocked && crossGroup.visible) {
+    const d1Cross = Math.hypot(playerPos.x, playerPos.z);
+    const d2Cross = Math.hypot(remotePlayer.position.x, remotePlayer.position.z);
+
+    const p1InCross = d1Cross < 2.8;
+    const p2InCross = d2Cross < 2.8;
+
+    if (p1InCross && p2InCross) {
+      if (currentLevel < 5) {
+        const nextLvl = currentLevel + 1;
+        // Generar aleatoriedad para los siguientes niveles si eres Host
+        if (myRole === 1) {
+          level2SafeIndex = Math.floor(Math.random() * 3);
+          level3Order = [0, 1, 2].sort(() => Math.random() - 0.5);
+        }
+        applyLoadLevel(nextLvl);
+        if (conn && conn.open) {
+          conn.send({
+            t: 'load_level',
+            lvl: nextLvl,
+            safeIdx: level2SafeIndex,
+            torchOrder: level3Order
+          });
+        }
+      } else {
+        triggerVictoryScreen();
+        if (conn && conn.open) conn.send({ t: 'victory' });
+      }
+    } else if (p1InCross || p2InCross) {
+      document.getElementById('mission-guide').textContent = "✚ 1/2 EN LA CRUZ: Tu compañero debe entrar dentro de la cruz también";
+    }
+  }
+
+  // --- LÓGICA DE PUZLES CON DIFICULTAD Y ALEATORIEDAD ---
+  // Nivel 2: Baldosa aleatoria
+  if (currentLevel === 2 && !doorUnlocked && myRole === 1 && time - tileDebounce > 1200) {
+    runeTiles.forEach(tile => {
+      const d = Math.hypot(playerPos.x - tile.x, playerPos.z - tile.z);
+      if (d < 1.3) {
+        tileDebounce = time;
+        if (tile.index === level2SafeIndex) {
+          applyDoorUnlock();
+          if (conn && conn.open) conn.send({ t: 'door_open' });
+        } else {
+          setThreat(threatLevel + 1);
+          playerPos.x = -18; playerPos.z = -18;
+          document.getElementById('mission-guide').textContent = "⚠️ ¡TRAMPA! Baldosa errónea. Sigue la tablilla de tu compañero";
+          if (conn && conn.open) {
+            conn.send({ t: 'threat', val: threatLevel });
+            if (threatLevel >= 3) conn.send({ t: 'jumpscare' });
+          }
+        }
+      }
+    });
+  }
+
+  // Nivel 3: Secuencia aleatoria de antorchas
+  if (currentLevel === 3 && !doorUnlocked && myRole === 2 && time - tileDebounce > 1000) {
+    pedestals.forEach(p => {
+      const d = Math.hypot(playerPos.x - p.x, playerPos.z - p.z);
+      if (d < 2.0 && !p.active) {
+        tileDebounce = time;
+        const expectedIndex = level3Order[pedestalStep];
+        if (p.index === expectedIndex) {
+          p.active = true;
+          p.fire.material.color.setHex(0x22c55e);
+          p.light.color.setHex(0x22c55e);
+          pedestalStep++;
+          document.getElementById('mission-guide').textContent = `¡ANTORCHA ACTIVADA! (${pedestalStep}/3)`;
+          if (pedestalStep >= 3) {
+            applyDoorUnlock();
+            if (conn && conn.open) conn.send({ t: 'door_open' });
+          }
+        } else {
+          setThreat(threatLevel + 1);
+          document.getElementById('mission-guide').textContent = "⚠️ ¡SECUENCIA ERRÓNEA! Tu compañero debe dictarte el orden";
+          if (conn && conn.open) conn.send({ t: 'threat', val: threatLevel });
+        }
+      }
+    });
+  }
+
+  // NIVEL 4: PALANCAS DE PRESIÓN SIMULTÁNEA CORREGIDAS
+  if (currentLevel === 4 && !doorUnlocked) {
+    const dLocalA = Math.hypot(playerPos.x - lever1.x, playerPos.z - lever1.z);
+    const dLocalB = Math.hypot(playerPos.x - lever2.x, playerPos.z - lever2.z);
+
+    let currentHold = null;
+    if (dLocalA < 2.2) currentHold = 'A';
+    else if (dLocalB < 2.2) currentHold = 'B';
+
+    if (currentHold !== localHoldingLever) {
+      localHoldingLever = currentHold;
+      updateLeverVisuals();
+      if (conn && conn.open) {
+        conn.send({ t: 'lever_state', lever: currentHold, pressed: (currentHold !== null) });
+      }
+    }
+
+    // Comprobación de que una persona está en A y otra en B (da igual quién esté en cuál)
+    const hasA = (localHoldingLever === 'A' || remoteHoldingLever === 'A');
+    const hasB = (localHoldingLever === 'B' || remoteHoldingLever === 'B');
+
+    if (hasA && hasB) {
+      applyDoorUnlock();
+      document.getElementById('mission-guide').textContent = "¡AMBAS PALANCAS ACTIVADAS! Corred a la Cruz Verde";
+      if (conn && conn.open) conn.send({ t: 'door_open' });
+    } else if (hasA || hasB) {
+      const waitName = hasA ? "Palanca A accionada" : "Palanca B accionada";
+      document.getElementById('mission-guide').textContent = `⏳ ${waitName}: El compañero debe accionar la otra a la vez`;
+    }
+  }
+
+  // NIVEL 5: RECOLECCIÓN DE 3 RELIQUIAS 100% SINCRONIZADA
+  if (currentLevel === 5 && !doorUnlocked) {
+    relics.forEach((r, idx) => {
+      if (!r.collected) {
+        const dLocal = Math.hypot(playerPos.x - r.x, playerPos.z - r.z);
+        // Si el jugador local la pisa, la recoge y avisa a la red inmediatamente
+        if (dLocal < 2.0) {
+          applyRemoteRelicPickup(idx);
+          if (conn && conn.open) {
+            conn.send({ t: 'relic_pickup', idx: idx });
+          }
+        }
+      }
+    });
+  }
+
+  // Sincronización WebRTC en directo (33 Hz)
+  if (conn && conn.open && time - lastNetTick > 30) {
+    lastNetTick = time;
+    const syncData = {
+      t: 'sync',
+      x: playerPos.x,
+      y: playerPos.y,
+      z: playerPos.z,
+      ry: localPlayer.rotation.y,
+      walking: isMoving
+    };
+    if (myRole === 1 && currentLevel === 1) {
+      syncData.c1 = altar1.colorIdx;
+      syncData.c2 = altar2.colorIdx;
+    }
+    conn.send(syncData);
+
+    // Comprobación de altares Nivel 1 (2 coincidencias necesarias para mayor reto)
+    if (currentLevel === 1 && !doorUnlocked) {
+      const dAltar1 = Math.hypot(playerPos.x - altar1.x, playerPos.z - altar1.z);
+      const remDAltar2 = Math.hypot(remotePlayer.position.x - altar2.x, remotePlayer.position.z - altar2.z);
+
+      if (dAltar1 < 2.5 && remDAltar2 < 2.5) {
+        if (altar1.colorIdx === altar2.colorIdx) {
+          level1CurrentMatches++;
+          document.getElementById('mission-guide').textContent = `¡RESONANCIA LOGRADA! (${level1CurrentMatches}/${level1MatchesNeeded})`;
+          if (level1CurrentMatches >= level1MatchesNeeded) {
+            applyDoorUnlock();
+            conn.send({ t: 'door_open' });
+          }
+          mismatchTimer = 0;
+        } else {
+          mismatchTimer += 0.03;
+          if (mismatchTimer > 4.0) {
+            mismatchTimer = 0;
+            setThreat(threatLevel + 1);
+            conn.send({ t: 'threat', val: threatLevel });
+            if (threatLevel >= 3) conn.send({ t: 'jumpscare' });
+          }
+        }
+      } else {
+        mismatchTimer = 0;
+      }
+    }
+  }
+
+  renderer.render(scene, camera);
+  renderMinimap();
+}
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
